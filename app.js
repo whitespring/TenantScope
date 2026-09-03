@@ -235,6 +235,9 @@ let msalConfigKey;
 let authenticationPromise;
 let reportNamesBusy = false;
 let pendingExportFormat;
+const BATCH_INTERVAL_MS = 1000;
+const runEtaDeadlines = new Map();
+let nextBatchAt = 0;
 
 class GraphError extends Error {
   constructor(status, code, message) {
@@ -357,6 +360,7 @@ function showView(view, scroll = true) {
 }
 
 function renderRunQueue(selected) {
+  runEtaDeadlines.clear();
   const jobs = [{ id: 'auth', name: 'Microsoft-Anmeldung', detail: 'Wartet auf Start' }, ...selected.map((scope) => ({
     id: scope.id,
     name: scope.name,
@@ -386,8 +390,10 @@ function updateRunProgress() {
   const jobs = [...document.querySelectorAll('#run-queue li')];
   const finished = jobs.filter((job) => job.matches('.done, .error')).length;
   const progress = jobs.length ? Math.round((finished / jobs.length) * 100) : 0;
+  const deadline = Math.max(0, ...runEtaDeadlines.values());
+  const estimate = deadline > Date.now() ? ` · noch etwa ${formatRemaining((deadline - Date.now()) / 1000)}` : '';
   document.querySelector('#progress-bar').style.width = `${progress}%`;
-  document.querySelector('#run-progress').textContent = `${finished} von ${jobs.length} Schritten abgeschlossen · ${progress} %`;
+  document.querySelector('#run-progress').textContent = `${finished} von ${jobs.length} Schritten abgeschlossen · ${progress} %${estimate}`;
 }
 
 function createScopeProgress(scope) {
@@ -396,17 +402,22 @@ function createScopeProgress(scope) {
   const tick = () => {
     const seconds = Math.floor((Date.now() - started) / 1000);
     elapsed.textContent = ` · ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    if (runEtaDeadlines.has(scope.id)) updateRunProgress();
   };
   const timer = setInterval(tick, 1000);
   tick();
   return {
-    update(detail) {
+    update(detail, etaSeconds) {
+      if (Number.isFinite(etaSeconds) && etaSeconds > 0) runEtaDeadlines.set(scope.id, Math.max(runEtaDeadlines.get(scope.id) || 0, Date.now() + etaSeconds * 1000));
+      else if (etaSeconds === 0) runEtaDeadlines.delete(scope.id);
       updateRunJob(scope.id, 'running', detail);
       document.querySelector('#run-title').textContent = `${scope.name}: ${detail}`;
     },
     stop() {
       clearInterval(timer);
+      runEtaDeadlines.delete(scope.id);
       elapsed.textContent = '';
+      updateRunProgress();
     },
   };
 }
@@ -481,6 +492,28 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function formatRemaining(seconds) {
+  const minutes = Math.ceil(seconds / 60);
+  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} s`;
+  if (minutes < 60) return `${minutes} Min.`;
+  return `${Math.floor(minutes / 60)} Std.${minutes % 60 ? ` ${minutes % 60} Min.` : ''}`;
+}
+
+async function paceGraphBatch() {
+  const start = Math.max(Date.now(), nextBatchAt);
+  nextBatchAt = start + BATCH_INTERVAL_MS;
+  if (start > Date.now()) await wait(start - Date.now());
+}
+
+async function waitWithCountdown(seconds, update) {
+  const deadline = Date.now() + seconds * 1000;
+  while (Date.now() < deadline) {
+    const remaining = Math.ceil((deadline - Date.now()) / 1000);
+    update(remaining);
+    await wait(Math.min(1000, deadline - Date.now()));
+  }
+}
+
 async function graphRequest(path, token, options = {}) {
   const url = graphUrl(path);
   const headers = new Headers(options.headers);
@@ -532,10 +565,18 @@ async function graphBatch(requests, token, progress, label = 'Detailabfragen') {
   const results = new Map();
   const failures = new Map();
   const groups = chunks(requests, 20);
+  const started = Date.now();
+  const estimateRemaining = (completedGroups, extraSeconds = 0) => {
+    const secondsPerGroup = completedGroups
+      ? Math.max(BATCH_INTERVAL_MS / 1000, (Date.now() - started) / 1000 / completedGroups)
+      : BATCH_INTERVAL_MS / 1000;
+    return Math.ceil(extraSeconds + secondsPerGroup * (groups.length - completedGroups));
+  };
   for (const [groupIndex, group] of groups.entries()) {
     let pending = group;
     for (let attempt = 0; pending.length && attempt < 3; attempt += 1) {
-      progress?.(`${label}: Batch ${groupIndex + 1}/${groups.length} · ${results.size}/${requests.length} Objekte verarbeitet${attempt ? ` · Wiederholung ${attempt}/2` : ''}`);
+      progress?.(`${label}: Batch ${groupIndex + 1}/${groups.length} · ${results.size}/${requests.length} Objekte verarbeitet${attempt ? ` · Wiederholung ${attempt}/2` : ''}`, estimateRemaining(groupIndex));
+      await paceGraphBatch();
       const batch = await graphRequest('/$batch', token, {
         method: 'POST',
         body: JSON.stringify({
@@ -569,8 +610,8 @@ async function graphBatch(requests, token, progress, label = 'Detailabfragen') {
       }
       pending = retry;
       if (pending.length) {
-        progress?.(`${label}: ${pending.length} Teilabfragen gedrosselt · erneuter Versuch in ${retryAfter} s`);
-        await wait(retryAfter * 1000);
+        const etaAfterRetry = estimateRemaining(groupIndex);
+        await waitWithCountdown(retryAfter, (remaining) => progress?.(`${label}: ${pending.length} Teilabfragen gedrosselt · erneuter Versuch in ${remaining} s`, etaAfterRetry + remaining));
       }
     }
   }

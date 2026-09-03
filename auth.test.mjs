@@ -39,6 +39,9 @@ assert.match(app, /createScopeProgress[\s\S]+queue-elapsed/, 'long inventory ste
 assert.match(app, /new Set\(\['sharing', 'apps'\]\)/, 'slow sharing and app scans must start early in parallel');
 assert.match(app, /Batch \$\{groupIndex \+ 1\}\/\$\{groups\.length\}/, 'batched detail scans must expose live batch progress');
 assert.match(app, /\[429, 503, 504\][\s\S]+Retry-After/, 'throttled requests inside Graph batches must be retried');
+assert.match(app, /BATCH_INTERVAL_MS = 1000[\s\S]+paceGraphBatch/, 'Graph batches must be paced centrally');
+assert.match(app, /waitWithCountdown\(retryAfter[\s\S]+erneuter Versuch in \$\{remaining\} s/, 'throttled batch retries must show a live countdown');
+assert.match(app, /runEtaDeadlines[\s\S]+noch etwa \$\{formatRemaining/, 'long-running scans must expose an overall ETA');
 assert.match(app, /data-report-panel/, 'report areas must render as separate views');
 assert.match(app, /reportView \? 'report'/, 'detail views must keep the report workflow step active');
 assert.match(app, /setAttribute\('aria-current', 'page'\)/, 'the active report area must be exposed to assistive technology');
