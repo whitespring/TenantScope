@@ -141,6 +141,27 @@ assert.deepEqual(sharing.metrics.map(([value]) => value), ['1', '1', '1', '1']);
 assert.deepEqual(sharing.details.rows[0].slice(0, 6), ['Projekt', 'Ordner', 'Dokumente', 'Ada', 'Grace', '1.1.2026']);
 assert.equal(sharing.details.ageColumn, 6);
 
+const throttledSharing = analyseSharing(
+  [{ id: 'd1', name: 'Dokumente' }],
+  new Map([['d1', [{ id: 'i1', name: 'Projekt', file: {}, shared: {} }]]]),
+  new Map(),
+  new Date('2026-09-03T00:00:00Z'),
+  0,
+  new Map([['d1:i1', { status: 429, code: 'TooManyRequests' }]]),
+);
+assert.match(throttledSharing.findings[0].title, /gedrosselt/);
+assert.equal(throttledSharing.details.rows[0][8], 'TooManyRequests · HTTP 429');
+
+const deniedSharing = analyseSharing(
+  [{ id: 'd1', name: 'Dokumente' }],
+  new Map([['d1', [{ id: 'i1', name: 'Projekt', file: {}, shared: {} }]]]),
+  new Map(),
+  new Date('2026-09-03T00:00:00Z'),
+  0,
+  new Map([['d1:i1', { status: 403, code: 'accessDenied' }]]),
+);
+assert.match(deniedSharing.findings[0].title, /Zugriff/);
+
 const devices = analyseDevices([{ id: 'd1', accountEnabled: true, approximateLastSignInDateTime: '2026-07-01T00:00:00Z' }], new Date('2026-09-03T00:00:00Z'));
 assert.equal(devices.findings[0].severity, 'medium');
 

@@ -530,31 +530,52 @@ function chunks(values, size) {
 
 async function graphBatch(requests, token, progress, label = 'Detailabfragen') {
   const results = new Map();
+  const failures = new Map();
   const groups = chunks(requests, 20);
   for (const [groupIndex, group] of groups.entries()) {
-    progress?.(`${label}: Batch ${groupIndex + 1}/${groups.length} · ${results.size}/${requests.length} Objekte verarbeitet`);
-    const batch = await graphRequest('/$batch', token, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: group.map((request, index) => ({
-          id: String(index + 1),
-          method: 'GET',
-          url: request.url,
-        })),
-      }),
-    });
-    for (const response of batch.responses || []) {
-      const request = group[Number(response.id) - 1];
-      if (!request || response.status !== 200) {
-        if (request) results.set(request.key, null);
-        continue;
+    let pending = group;
+    for (let attempt = 0; pending.length && attempt < 3; attempt += 1) {
+      progress?.(`${label}: Batch ${groupIndex + 1}/${groups.length} · ${results.size}/${requests.length} Objekte verarbeitet${attempt ? ` · Wiederholung ${attempt}/2` : ''}`);
+      const batch = await graphRequest('/$batch', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          requests: pending.map((request, index) => ({
+            id: String(index + 1),
+            method: 'GET',
+            url: request.url,
+          })),
+        }),
+      });
+      const responses = new Map((batch.responses || []).map((response) => [response.id, response]));
+      const retry = [];
+      let retryAfter = 2 ** attempt;
+      for (const [index, request] of pending.entries()) {
+        const response = responses.get(String(index + 1));
+        if (response?.status === 200) {
+          const value = response.body?.value ?? response.body;
+          if (Array.isArray(value) && response.body?.['@odata.nextLink']) value.push(...await graphCollection(response.body['@odata.nextLink'], token));
+          results.set(request.key, value);
+          continue;
+        }
+        const failure = { status: response?.status || 503, code: response?.body?.error?.code || 'serviceUnavailable' };
+        if ([429, 503, 504].includes(failure.status) && attempt < 2) {
+          const suggested = Number(response?.headers?.['Retry-After'] || response?.headers?.['retry-after']);
+          if (Number.isFinite(suggested) && suggested > 0) retryAfter = Math.max(retryAfter, suggested);
+          retry.push(request);
+        } else {
+          results.set(request.key, null);
+          failures.set(request.key, failure);
+        }
       }
-      const value = response.body?.value ?? response.body;
-      if (Array.isArray(value) && response.body?.['@odata.nextLink']) value.push(...await graphCollection(response.body['@odata.nextLink'], token));
-      results.set(request.key, value);
+      pending = retry;
+      if (pending.length) {
+        progress?.(`${label}: ${pending.length} Teilabfragen gedrosselt · erneuter Versuch in ${retryAfter} s`);
+        await wait(retryAfter * 1000);
+      }
     }
   }
-  if (requests.length) progress?.(`${label}: ${requests.length}/${requests.length} Objekte verarbeitet`);
+  if (requests.length) progress?.(`${label}: ${requests.length}/${requests.length} Objekte verarbeitet${failures.size ? ` · ${failures.size} nicht lesbar` : ''}`);
+  results.failures = failures;
   return results;
 }
 
@@ -659,7 +680,7 @@ async function sharedFileInventory(drives, token, progress) {
     key: `${drive.id}:${item.id}`,
     url: `/drives/${encodeURIComponent(drive.id)}/items/${encodeURIComponent(item.id)}/permissions?$select=id,roles,expirationDateTime,hasPassword,grantedToV2,grantedToIdentitiesV2,invitation,link`,
   })), token, progress, 'Freigabeberechtigungen');
-  return { itemsByDrive, permissions, unreadableDrives };
+  return { itemsByDrive, permissions, permissionFailures: permissions.failures, unreadableDrives };
 }
 
 async function appRoleInventory(servicePrincipals, token, progress) {
@@ -825,8 +846,8 @@ const inventoryRunners = {
       users: { label: 'OneDrive-Besitzer', path: '/users?$select=id,displayName,userPrincipalName,accountEnabled,userType&$top=999' },
     }, progress);
     const drives = await tenantDriveInventory(data.sites, data.users.filter((user) => user.accountEnabled && user.userType !== 'Guest'), token, progress);
-    const { itemsByDrive, permissions, unreadableDrives } = await sharedFileInventory(drives, token, progress);
-    return analyseSharing(drives, itemsByDrive, permissions, undefined, unreadableDrives);
+    const { itemsByDrive, permissions, permissionFailures, unreadableDrives } = await sharedFileInventory(drives, token, progress);
+    return analyseSharing(drives, itemsByDrive, permissions, undefined, unreadableDrives, permissionFailures);
   },
   async devices(token, progress) {
     const data = await requiredDatasets(token, { devices: { label: 'Entra-Geräte', path: '/devices?$select=id,deviceId,displayName,operatingSystem,operatingSystemVersion,accountEnabled,approximateLastSignInDateTime,trustType,isCompliant,isManaged&$top=999' } }, progress);

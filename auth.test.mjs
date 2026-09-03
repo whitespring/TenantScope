@@ -38,6 +38,7 @@ assert.match(app, /data-table-search/, 'every detail table must expose a text fi
 assert.match(app, /createScopeProgress[\s\S]+queue-elapsed/, 'long inventory steps must show a live elapsed clock');
 assert.match(app, /new Set\(\['sharing', 'apps'\]\)/, 'slow sharing and app scans must start early in parallel');
 assert.match(app, /Batch \$\{groupIndex \+ 1\}\/\$\{groups\.length\}/, 'batched detail scans must expose live batch progress');
+assert.match(app, /\[429, 503, 504\][\s\S]+Retry-After/, 'throttled requests inside Graph batches must be retried');
 assert.match(app, /data-report-panel/, 'report areas must render as separate views');
 assert.match(app, /reportView \? 'report'/, 'detail views must keep the report workflow step active');
 assert.match(app, /setAttribute\('aria-current', 'page'\)/, 'the active report area must be exposed to assistive technology');
