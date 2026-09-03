@@ -28,6 +28,7 @@
   --yellow: #f7c80d;
   --red: #c94444;
   --shadow: none;
+  --sticky-header-height: 88px;
 }
 
 body {
@@ -36,7 +37,10 @@ body {
   caret-color: var(--blue-dark);
 }
 
-html { scrollbar-color: var(--blue) #edf0f1; }
+html {
+  scroll-padding-top: var(--sticky-header-height);
+  scrollbar-color: var(--blue) #edf0f1;
+}
 ::selection { color: #101820; background: #bdeefa; }
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: #edf0f1; }
@@ -72,7 +76,7 @@ h2,
   position: sticky;
   top: 0;
   z-index: 20;
-  height: 88px;
+  height: var(--sticky-header-height);
   padding: 0 clamp(28px, 3vw, 52px);
   display: grid;
   grid-template-columns: auto minmax(360px, 1fr) auto;
@@ -106,7 +110,7 @@ h2,
 .site-header .side-nav-item {
   position: relative;
   width: auto;
-  min-height: 88px;
+  min-height: var(--sticky-header-height);
   padding: 0;
   display: flex;
   border-radius: 0;
@@ -160,14 +164,14 @@ h2,
 .report-layout {
   display: grid;
   grid-template-columns: clamp(224px, 18vw, 264px) minmax(0, 1fr);
-  min-height: calc(100vh - 88px);
+  min-height: calc(100vh - var(--sticky-header-height));
 }
 
 .report-sidebar {
   position: sticky;
-  top: 88px;
+  top: var(--sticky-header-height);
   align-self: start;
-  max-height: calc(100vh - 88px);
+  max-height: calc(100vh - var(--sticky-header-height));
   padding: 48px 20px 48px clamp(28px, 3vw, 52px);
   overflow-y: auto;
   border-right: 1px solid var(--line);
@@ -235,7 +239,7 @@ h2,
 .report {
   position: relative;
   width: 100%;
-  min-height: calc(100vh - 88px);
+  min-height: calc(100vh - var(--sticky-header-height));
   padding: 72px clamp(34px, 6.3vw, 98px) clamp(54px, 6vw, 88px);
   border: 0;
   border-radius: 0;
@@ -408,7 +412,7 @@ h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.0
 .scope-tag { background: transparent; padding: 0; }
 
 .start-row { border-top-color: var(--line); }
-.run-panel { min-height: calc(100vh - 88px); border-radius: 0; box-shadow: none; }
+.run-panel { min-height: calc(100vh - var(--sticky-header-height)); border-radius: 0; box-shadow: none; }
 .run-queue { gap: 0; }
 .run-queue li { border-width: 0 0 1px; border-radius: 0; background: transparent; }
 .run-queue li.running { animation: active-row 1.8s ease-in-out infinite; }
@@ -466,17 +470,18 @@ h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.0
 }
 
 @media (min-width: 781px) {
-  .site-header { height: 5.729vw; }
-  .site-header .side-nav-item { min-height: 5.729vw; }
-  .report-layout { min-height: calc(100vh - 5.729vw); }
+  :root { --sticky-header-height: 5.729vw; }
+  .site-header { height: var(--sticky-header-height); }
+  .site-header .side-nav-item { min-height: var(--sticky-header-height); }
+  .report-layout { min-height: calc(100vh - var(--sticky-header-height)); }
   .report-sidebar {
-    top: 5.729vw;
-    max-height: calc(100vh - 5.729vw);
+    top: var(--sticky-header-height);
+    max-height: calc(100vh - var(--sticky-header-height));
     padding-top: 4.688vw;
   }
   .report-main { padding-top: 4.688vw; }
   .section-block {
-    min-height: calc(100vh - 5.729vw);
+    min-height: calc(100vh - var(--sticky-header-height));
     padding-top: 4.688vw;
   }
   #setup .section-heading { margin-bottom: 3.19vw; }
@@ -533,9 +538,10 @@ h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.0
 }
 
 @media (max-width: 780px) {
+  :root { --sticky-header-height: 124px; }
   .site-header {
     height: auto;
-    min-height: 124px;
+    min-height: var(--sticky-header-height);
     padding: 14px 20px 0;
     grid-template-columns: 1fr auto;
     grid-template-rows: 48px 48px;
@@ -555,8 +561,8 @@ h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.0
   }
 
   .site-header .side-nav-item { min-height: 48px; }
-  .report-sidebar { top: 124px; }
-  .section-block { min-height: calc(100vh - 124px); padding: 46px 24px 64px; }
+  .report-sidebar { top: var(--sticky-header-height); }
+  .section-block { min-height: calc(100vh - var(--sticky-header-height)); padding: 46px 24px 64px; }
   .section-heading,
   #setup .section-heading { display: block; margin-bottom: 38px; }
   h2 { font-size: clamp(36px, 10vw, 48px); overflow-wrap: anywhere; }
