@@ -1762,6 +1762,12 @@ usageNoticeForm.addEventListener('submit', (event) => {
   usageNoticeDialog.close();
 });
 document.querySelector('#open-usage-notice').addEventListener('click', () => showUsageNotice(true));
+document.querySelector('#home-link').addEventListener('click', (event) => {
+  if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  history.replaceState({}, '', window.location.pathname);
+  showView('setup');
+});
 startButton.addEventListener('click', runInventory);
 continueButton.addEventListener('click', () => showView('scope'));
 consentButton.addEventListener('click', openAdminConsent);

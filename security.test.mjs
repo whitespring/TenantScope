@@ -32,6 +32,8 @@ assert.doesNotMatch(nginx, /Access-Control-Allow-Origin/, 'the private same-orig
 assert.match(auth, /dist\/redirect_bridge\/index\.mjs/, 'the auth bridge must use the installed MSAL entry point');
 assert.match(app, /renderRunQueue\(\[scope\]\)[\s\S]*runScopeInventory\(scope, accessToken\)/, 'scope rechecks must reuse verbose queue progress');
 assert.doesNotMatch(app, /inventoryRunners\[scope\.id\]\(accessToken, \(\) => \{\}\)/, 'scope rechecks must not discard progress updates');
+assert.match(indexHtml, /id="home-link" href="\/"/, 'the wordmark must use a real root URL');
+assert.match(app, /#home-link[\s\S]*preventDefault\(\)[\s\S]*showView\('setup'\)/, 'the wordmark must preserve the current SPA session on normal clicks');
 for (const html of [indexHtml, authHtml]) {
   const importMap = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)?.[1];
   assert.ok(importMap, 'each app page must have an import map');
