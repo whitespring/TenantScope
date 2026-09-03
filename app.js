@@ -1483,25 +1483,28 @@ async function recheckScope(scopeId) {
   const activeView = document.querySelector('[data-report-panel]:not([hidden])')?.dataset.reportPanel || scopeId;
   const buttons = [...document.querySelectorAll(`[data-recheck-scope="${CSS.escape(scopeId)}"]`)];
   buttons.forEach((button) => { button.disabled = true; button.textContent = 'Prüft live …'; });
+  renderRunQueue([scope]);
+  updateRunJob('auth', 'running', 'Bestehende Microsoft-Sitzung wird geprüft');
+  document.querySelector('#run-title').textContent = `${scope.name}: Anmeldung wird geprüft …`;
+  showView('run');
   try {
-    const { accessToken } = await acquireGraphAccess(tenantData(), [scope]);
+    const { accessToken, account } = await acquireGraphAccess(tenantData(), [scope]);
+    updateRunJob('auth', 'done', `Verbunden als ${account.username || account.name}`);
     const previous = currentReport.results.find((item) => item.id === scopeId);
-    let result;
-    try {
-      result = { ...scope, ...(await inventoryRunners[scope.id](accessToken, () => {})) };
-    } catch (error) {
-      result = { ...scope, error: friendlyError(error, scope.id) };
-    }
+    const result = await runScopeInventory(scope, accessToken);
     const snapshot = (item) => JSON.stringify({ error: item?.error, summary: item?.summary, metrics: item?.metrics, findings: item?.findings, details: item?.details, extraDetails: item?.extraDetails, unavailable: item?.unavailable });
     result.checkedAt = new Date().toISOString();
     result.recheckChanged = snapshot(previous) !== snapshot(result);
     currentReport = buildReport(currentReport.tenant, { username: currentReport.account }, currentReport.results.map((item) => item.id === scopeId ? result : item));
     renderReport(currentReport);
+    await wait(350);
     showView(activeView, false);
     showToast(`${scope.name}: ${result.recheckChanged ? 'Ergebnis geändert' : 'keine Änderung'}`);
   } catch (error) {
+    updateRunJob('auth', 'error', friendlyError(error, scope.id));
     buttons.forEach((button) => { button.disabled = false; button.textContent = 'Bereich erneut prüfen'; });
     setAuthMessage(`Re-Check fehlgeschlagen: ${friendlyError(error, scope.id)}`);
+    showView(activeView, false);
     showToast('Re-Check fehlgeschlagen');
   }
 }

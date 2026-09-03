@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { access, readFile } from 'node:fs/promises';
 
-const [server, nginx, service, auth, indexHtml, authHtml, releaseFiles] = await Promise.all([
+const [server, nginx, service, auth, app, indexHtml, authHtml, releaseFiles] = await Promise.all([
   readFile(new URL('./server.py', import.meta.url), 'utf8'),
   readFile(new URL('./deploy/nginx-site.conf', import.meta.url), 'utf8'),
   readFile(new URL('./deploy/tenant-report-proxy.service', import.meta.url), 'utf8'),
   readFile(new URL('./auth.js', import.meta.url), 'utf8'),
+  readFile(new URL('./app.js', import.meta.url), 'utf8'),
   readFile(new URL('./index.html', import.meta.url), 'utf8'),
   readFile(new URL('./auth.html', import.meta.url), 'utf8'),
   readFile(new URL('./deploy/release-files.txt', import.meta.url), 'utf8'),
@@ -29,6 +30,8 @@ assert.match(nginx, /listen 443 ssl/, 'the origin must support encrypted proxy t
 assert.match(nginx, /location = \/ \{[\s\S]*try_files \/index\.html =404;/, 'the public webroot must use an allowlist');
 assert.doesNotMatch(nginx, /Access-Control-Allow-Origin/, 'the private same-origin API must not enable CORS');
 assert.match(auth, /dist\/redirect_bridge\/index\.mjs/, 'the auth bridge must use the installed MSAL entry point');
+assert.match(app, /renderRunQueue\(\[scope\]\)[\s\S]*runScopeInventory\(scope, accessToken\)/, 'scope rechecks must reuse verbose queue progress');
+assert.doesNotMatch(app, /inventoryRunners\[scope\.id\]\(accessToken, \(\) => \{\}\)/, 'scope rechecks must not discard progress updates');
 for (const html of [indexHtml, authHtml]) {
   const importMap = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)?.[1];
   assert.ok(importMap, 'each app page must have an import map');
