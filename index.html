@@ -44,8 +44,6 @@
       </div>
     </header>
 
-    <nav class="report-nav" id="report-nav" hidden aria-label="Berichtsbereiche"></nav>
-
     <main class="app-shell">
       <div class="workspace">
         <section class="section-block" id="setup" aria-labelledby="setup-title">
@@ -155,18 +153,30 @@
         </section>
 
         <section class="report" id="report" hidden aria-labelledby="report-title">
-          <div class="report-toolbar">
-            <div>
-              <p class="eyebrow">Live-Bericht · Microsoft Graph</p>
-              <h2 id="report-title">Governance-Inventur</h2>
-            </div>
-            <div class="export-actions" aria-label="Bericht exportieren">
-              <button class="button button-secondary" type="button" data-export="pdf">PDF</button>
-              <button class="button button-secondary" type="button" data-export="md">Markdown</button>
-              <button class="button button-primary" type="button" data-export="docx">DOCX</button>
+          <div class="report-layout">
+            <aside class="report-sidebar" aria-label="Berichtsbereiche">
+              <strong class="report-sidebar-title">Berichtsbereiche</strong>
+              <label class="report-nav-select">
+                <span>Berichtsbereich</span>
+                <select id="report-nav-select"></select>
+              </label>
+              <nav class="report-nav" id="report-nav" hidden aria-label="Berichtsbereiche"></nav>
+            </aside>
+            <div class="report-main">
+              <div class="report-toolbar">
+                <div>
+                  <p class="eyebrow">Live-Bericht · Microsoft Graph</p>
+                  <h2 id="report-title">Governance-Inventur</h2>
+                </div>
+                <div class="export-actions" aria-label="Bericht exportieren">
+                  <button class="button button-secondary" type="button" data-export="pdf">PDF</button>
+                  <button class="button button-secondary" type="button" data-export="md">Markdown</button>
+                  <button class="button button-primary" type="button" data-export="docx">DOCX</button>
+                </div>
+              </div>
+              <div id="report-content"></div>
             </div>
           </div>
-          <div id="report-content"></div>
         </section>
       </div>
     </main>

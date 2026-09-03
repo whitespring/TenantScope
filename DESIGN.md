@@ -94,7 +94,7 @@ Die Palette ist überwiegend neutral; die beiden Markenakzente werden sparsam un
 
 ## Layout
 
-Desktop nutzt einen Full-Width-Canvas mit einer leichten Kopfzeile. Die Verbindungssicht teilt die Fläche ungefähr 70/30 in Arbeitsbereich und tonale Hilfe. Ergebnisnavigation bleibt horizontal erreichbar. Unter 780px werden Prozessschritte scrollbar und die Hilfespalte fließt unter die Aufgabe; bei 390px darf kein horizontaler Seitenüberlauf entstehen.
+Desktop nutzt einen Full-Width-Canvas mit einer leichten Kopfzeile. Die Verbindungssicht teilt die Fläche ungefähr 70/30 in Arbeitsbereich und tonale Hilfe. Ergebnisbereiche stehen in einer festen linken Seitennavigation; unter 960px ersetzt sie ein natives Auswahlfeld. Unter 780px werden Prozessschritte scrollbar und die Hilfespalte fließt unter die Aufgabe; bei 390px darf kein horizontaler Seitenüberlauf entstehen.
 
 ## Elevation & Depth
 

@@ -216,6 +216,7 @@ const reportSection = document.querySelector('#report');
 const runPanel = document.querySelector('#run-panel');
 const sideNav = document.querySelector('#side-nav');
 const reportNav = document.querySelector('#report-nav');
+const reportNavSelect = document.querySelector('#report-nav-select');
 const reportOverviewNav = document.querySelector('#report-overview-nav');
 const authMessage = document.querySelector('#auth-message');
 const toast = document.querySelector('#toast');
@@ -340,11 +341,17 @@ function setStep(step) {
 function showView(view, scroll = true) {
   const reportView = !['setup', 'scope', 'run'].includes(view);
   const selectedReportView = view === 'report' ? 'overview' : view;
+  const workflowView = reportView ? 'report' : view === 'run' ? 'scope' : view;
   setupSection.hidden = view !== 'setup';
   scopeSection.hidden = view !== 'scope';
   runPanel.hidden = view !== 'run';
   reportSection.hidden = !reportView;
-  sideNav.querySelectorAll('[data-app-view]').forEach((button) => button.classList.toggle('active', button.dataset.appView === (view === 'run' ? 'scope' : view)));
+  sideNav.querySelectorAll('[data-app-view]').forEach((button) => {
+    const current = button.dataset.appView === workflowView;
+    button.classList.toggle('active', current);
+    if (current) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  });
   if (reportView) selectReportView(selectedReportView);
   if (scroll) (reportView ? reportSection : view === 'run' ? runPanel : view === 'scope' ? scopeSection : setupSection).scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1293,13 +1300,23 @@ function setupPagination(root) {
 }
 
 function renderReportNavigation(results) {
+  const items = [
+    { id: 'overview', name: 'Gesamtübersicht', status: 'Gesamtstatus', statusClass: '' },
+    ...results.map((result) => ({
+      id: result.id,
+      name: result.name,
+      status: result.error ? 'Nicht auswertbar' : result.unavailable ? 'Teilweise auswertbar' : 'Live analysiert',
+      statusClass: result.error ? 'error' : result.unavailable ? 'partial' : '',
+    })),
+  ];
   reportOverviewNav.disabled = false;
   reportNav.hidden = false;
-  reportNav.innerHTML = results.map((result) => `
-    <button class="side-nav-item" type="button" data-report-view="${escapeHtml(result.id)}">
-      <span class="nav-status ${result.error ? 'error' : result.unavailable ? 'partial' : ''}" aria-hidden="true"></span>
-      <span><strong>${escapeHtml(result.name)}</strong><small>${escapeHtml(result.error ? 'Nicht auswertbar' : result.summary)}</small></span>
+  reportNav.innerHTML = items.map((item) => `
+    <button class="side-nav-item" type="button" data-report-view="${escapeHtml(item.id)}" aria-label="${escapeHtml(`${item.name}: ${item.status}`)}">
+      <span class="nav-status ${item.statusClass}" aria-hidden="true"></span>
+      <strong>${escapeHtml(item.name)}</strong>
     </button>`).join('');
+  reportNavSelect.innerHTML = items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
 }
 
 function fitMetricValues(root) {
@@ -1313,8 +1330,13 @@ function fitMetricValues(root) {
 function selectReportView(view) {
   const selected = document.querySelector(`[data-report-panel="${CSS.escape(view)}"]`) || document.querySelector('[data-report-panel="overview"]');
   document.querySelectorAll('[data-report-panel]').forEach((panel) => { panel.hidden = panel !== selected; });
-  reportOverviewNav.classList.toggle('active', selected.dataset.reportPanel === 'overview');
-  reportNav.querySelectorAll('[data-report-view]').forEach((button) => button.classList.toggle('active', button.dataset.reportView === selected.dataset.reportPanel));
+  reportNav.querySelectorAll('[data-report-view]').forEach((button) => {
+    const current = button.dataset.reportView === selected.dataset.reportPanel;
+    button.classList.toggle('active', current);
+    if (current) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  reportNavSelect.value = selected.dataset.reportPanel;
   document.querySelector('#report-title').textContent = selected.dataset.reportPanel === 'overview' ? 'Governance-Inventur' : selected.dataset.reportTitle;
   fitMetricValues(selected);
 }
@@ -1365,7 +1387,6 @@ function renderReport(report) {
       const guidance = scopeGuidance[result.id];
       return `<div data-report-panel="${escapeHtml(result.id)}" data-report-title="${escapeHtml(result.name)}" data-report-scope="${escapeHtml(result.id)}" hidden>
         <div class="area-heading">
-          <p class="eyebrow">${escapeHtml(result.tag)}</p><h3>${escapeHtml(result.name)}</h3>
           <p>${escapeHtml(result.error || result.summary)}</p>
           ${guidance ? `<p class="area-explanation">${escapeHtml(guidance.explanation)}</p><div class="area-practice" data-export-section="goodPractice"><strong>Good Practice</strong><p>${escapeHtml(guidance.goodPractice)}</p>${guidanceActions(result.id, 'Diesen Bereich erneut prüfen', result)}</div>` : ''}
         </div>
@@ -1635,6 +1656,7 @@ document.querySelector('#reset-session').addEventListener('click', async () => {
   reportOverviewNav.disabled = true;
   reportNav.hidden = true;
   reportNav.innerHTML = '';
+  reportNavSelect.innerHTML = '';
   startButton.innerHTML = 'Anmelden & Inventur starten <span class="icon icon-arrow-right" aria-hidden="true"></span>';
   setSaveStatus(false);
   setAuthMessage();
@@ -1668,6 +1690,7 @@ reportNav.addEventListener('click', (event) => {
   const button = event.target.closest('button[data-report-view]');
   if (button) showView(button.dataset.reportView);
 });
+reportNavSelect.addEventListener('change', () => showView(reportNavSelect.value));
 document.querySelector('#report-content').addEventListener('click', (event) => {
   const metricCard = event.target.closest('[data-metric-index]');
   if (metricCard) {

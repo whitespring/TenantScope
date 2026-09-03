@@ -13,6 +13,8 @@ assert.match(app, /9002326[\s\S]+Single-page application/, 'SPA platform errors 
 assert.match(callback, /src="auth\.js"/, 'callback must load its bridge script');
 assert.match(bridge, /broadcastResponseToMainFrame/, 'callback must relay the response to MSAL');
 assert.match(index, /id="side-nav"/, 'the app must expose its section navigation');
+assert.match(index, /class="report-sidebar"[\s\S]+id="report-nav"/, 'report areas must use a left sidebar on desktop');
+assert.match(index, /id="report-nav-select"/, 'report areas must use a compact selector on narrow screens');
 assert.match(index, /id="continue-to-scope"/, 'tenant setup must expose a visible primary continuation button');
 assert.match(index, /id="export-dialog"/, 'all export formats must use the configurable export dialog');
 assert.match(index, /id="usage-notice-dialog"/, 'the app must show a usage and liability notice before use');
@@ -37,6 +39,8 @@ assert.match(app, /createScopeProgress[\s\S]+queue-elapsed/, 'long inventory ste
 assert.match(app, /new Set\(\['sharing', 'apps'\]\)/, 'slow sharing and app scans must start early in parallel');
 assert.match(app, /Batch \$\{groupIndex \+ 1\}\/\$\{groups\.length\}/, 'batched detail scans must expose live batch progress');
 assert.match(app, /data-report-panel/, 'report areas must render as separate views');
+assert.match(app, /reportView \? 'report'/, 'detail views must keep the report workflow step active');
+assert.match(app, /setAttribute\('aria-current', 'page'\)/, 'the active report area must be exposed to assistive technology');
 assert.match(app, /data-recheck-scope/, 'each report area must support a live re-check');
 assert.match(app, /Ergebnis geändert['"] : ['"]Keine Änderung/, 're-checks must report whether the result changed');
 assert.match(app, /result\.checkedAt = new Date\(\)\.toISOString\(\)/, 're-checks must retain a visible timestamp');

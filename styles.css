@@ -80,8 +80,6 @@ h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-weight: 500
 .side-nav-item.active { color: white; background: rgba(255,255,255,.09); }
 .side-nav-item.active .nav-index { color: var(--navy); background: #7ed3cf; border-color: #7ed3cf; }
 .side-nav-item.done .nav-index { color: white; background: var(--blue); border-color: var(--blue); }
-.report-nav { display: grid; gap: 3px; margin-top: 5px; padding: 8px 0 0 22px; border-top: 1px solid rgba(255,255,255,.12); }
-.report-nav .side-nav-item { min-height: 45px; grid-template-columns: 12px 1fr; padding-block: 6px; }
 .nav-status { width: 7px; height: 7px; border-radius: 50%; background: #7ed3cf; }
 .nav-status.partial { background: var(--yellow); }
 .nav-status.error { background: #ef8f83; }
