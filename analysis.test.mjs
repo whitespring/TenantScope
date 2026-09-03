@@ -110,6 +110,26 @@ assert.deepEqual(applications.details.rows[0].slice(1), ['Rotation 2026', 'Secre
 assert.equal(analyseTenant([{}], [{ id: 'example.com', isVerified: false }]).findings[0].severity, 'medium');
 assert.equal(analyseRoles([{ roleDefinition: { displayName: 'Global Administrator' }, principal: { displayName: 'Ada' } }]).findings[0].severity, 'high');
 assert.equal(analyseAccess([]).findings[0].severity, 'high');
+const p1Sku = {
+  skuId: 'business-premium', skuPartNumber: 'O365_BUSINESS_PREMIUM', capabilityStatus: 'Enabled', prepaidUnits: { enabled: 2 },
+  servicePlans: [{ servicePlanId: '41781fb2-bc02-4b7c-bd55-b576c07bb09d', servicePlanName: 'AAD_PREMIUM', provisioningStatus: 'Success' }],
+};
+const accessUsers = [
+  { id: '1', accountEnabled: true, userType: 'Member', assignedLicenses: [{ skuId: 'business-premium', disabledPlans: [] }] },
+  { id: '2', accountEnabled: true, userType: 'Member', assignedLicenses: [] },
+  { id: '3', accountEnabled: true, userType: 'Guest', assignedLicenses: [] },
+];
+const freeAccess = analyseAccess([], [], accessUsers, { isEnabled: true });
+assert.equal(freeAccess.findings[0].severity, 'ok');
+assert.match(freeAccess.findings[0].title, /Security Defaults/);
+const partialAccess = analyseAccess([], [p1Sku], accessUsers, { isEnabled: false });
+assert.equal(partialAccess.findings[0].severity, 'medium');
+assert.match(partialAccess.findings[0].title, /1\/2/);
+const licensedAccess = analyseAccess([], [p1Sku], accessUsers.map((user) => user.userType === 'Member' ? { ...user, assignedLicenses: [{ skuId: 'business-premium', disabledPlans: [] }] } : user), { isEnabled: false });
+assert.equal(licensedAccess.findings[0].severity, 'high');
+assert.equal(licensedAccess.extraDetails[0].rows[0][4], 'Tenantweit abgedeckt');
+const disabledP1 = analyseAccess([], [p1Sku], [{ ...accessUsers[0], assignedLicenses: [{ skuId: 'business-premium', disabledPlans: ['41781fb2-bc02-4b7c-bd55-b576c07bb09d'] }] }], { isEnabled: false });
+assert.match(disabledP1.findings[0].title, /0\/1/);
 
 const usage = analyseUsage(
   [{ id: '1', displayName: 'Ada Lovelace', userPrincipalName: 'ada@example.com', accountEnabled: true, userType: 'Member', assignedLicenses: [{}] }],

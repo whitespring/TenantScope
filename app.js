@@ -55,7 +55,7 @@ const scopes = [
   {
     id: 'access', name: 'Conditional Access', tag: 'Zero Trust',
     description: 'Status und Bestand der Zugriffsrichtlinien',
-    permissions: ['Policy.Read.All'],
+    permissions: ['Policy.Read.All', 'LicenseAssignment.Read.All', 'User.Read.All'],
   },
   {
     id: 'licenses', name: 'Lizenzoptimierung & Kosten', tag: 'FinOps',
@@ -134,16 +134,16 @@ const scopeGuidance = {
     adminLinks: [['Rollen verwalten', 'https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AllRolesBlade']],
   },
   access: {
-    explanation: 'Conditional Access steuert Zugriffe anhand von Identität, Gerät, Standort und Risiko. Diese Inventur bewertet Bestand und Aktivierungsstatus, aber keine vollständige Richtlinienabdeckung oder What-if-Wirkung.',
-    goodPractice: 'Basisrichtlinien zunächst im Report-only-Modus testen und gestuft aktivieren: MFA für Administratoren und Benutzer, Blockade von Legacy Authentication und risikobasierte Kontrollen. Nur dokumentierte Notfallkonten ausschließen und deren Nutzung überwachen.',
+    explanation: 'Conditional Access steuert Zugriffe anhand von Identität, Gerät, Standort und Risiko und benötigt Entra ID P1 pro betroffenem Benutzer; risikobasierte Richtlinien benötigen P2. TenantScope gleicht deshalb Richtlinien, Security Defaults, verfügbare Seats und Zuweisungen ab.',
+    goodPractice: 'Ohne P1/P2 Security Defaults als lizenzfreie Basis aktivieren. Mit ausreichender P1-Abdeckung Basisrichtlinien zunächst im Report-only-Modus testen und gestuft aktivieren: MFA, Blockade von Legacy Authentication und nur dokumentierte Notfallkonten als Ausnahme. Risikobasierte Kontrollen erst mit P2 empfehlen.',
     helpUrl: 'https://learn.microsoft.com/en-us/entra/identity/conditional-access/overview',
-    adminLinks: [['Richtlinien verwalten', 'https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/ConditionalAccessBlade/~/Policies']],
+    adminLinks: [['Richtlinien verwalten', 'https://entra.microsoft.com/#view/Microsoft_AAD_ConditionalAccess/ConditionalAccessBlade/~/Policies'], ['Security Defaults prüfen', 'https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Properties']],
   },
   licenses: {
     explanation: 'Die Lizenzberatung verbindet abonnierte SKUs, einzelne Zuweisungen, deren Quelle und 90-Tage-Nutzungsberichte. Deaktivierte Konten sind starke Rückgabe-Kandidaten; Inaktivität und mögliche Downgrades bleiben Prüfhypothesen, weil nicht jede lizenzierte Security-, Compliance-, Telefonie- oder Gerätefunktion als Benutzernutzung messbar ist.',
     goodPractice: 'Deaktivierte Konten und 90-Tage-Inaktivität zuerst prüfen, gruppenbasierte Zuweisungen an der Quelle korrigieren und eine kleine dokumentierte Reserve festlegen. Downgrades nur nach Abgleich von Fachbedarf, Desktop-Apps, Security, Compliance, Intune, Telefonie, Aufbewahrung und Vertragsfristen umsetzen. Euro-Werte auf tatsächlichen Netto-Vertragspreisen statt Listenpreisen basieren.',
     helpUrl: 'https://learn.microsoft.com/en-us/microsoft-365/admin/activity-reports/activity-reports?view=o365-worldwide',
-    adminLinks: [['Lizenzen verwalten', 'https://admin.microsoft.com/Adminportal/Home#/licenses'], ['Produkte & Verträge prüfen', 'https://admin.microsoft.com/Adminportal/Home#/subscriptions']],
+    adminLinks: [['Lizenzen verwalten', 'https://admin.microsoft.com/Adminportal/Home#/licenses'], ['Produkte & Verträge prüfen', 'https://admin.microsoft.com/Adminportal/Home#/subscriptions'], ['Lizenzabhängigkeiten', 'https://learn.microsoft.com/en-us/entra/fundamentals/licensing']],
   },
   usage: {
     explanation: 'Die Nutzungsdaten stammen aus Microsoft-365-Berichten und zeigen Aktivität, nicht Produktivität oder Qualität. Berichte können 24 bis 72 Stunden verzögert und durch die Datenschutzoption anonymisiert sein.',
@@ -822,8 +822,14 @@ const inventoryRunners = {
     return analyseRoles(attachRoleDefinitions(data.assignments, data.definitions));
   },
   async access(token, progress) {
-    const data = await requiredDatasets(token, { policies: { label: 'Conditional-Access-Richtlinien', path: '/identity/conditionalAccess/policies?$select=id,displayName,state,createdDateTime,modifiedDateTime&$top=999' } }, progress);
-    return analyseAccess(data.policies);
+    const { data, failures, allFailed } = await readDatasets(token, {
+      policies: { label: 'Conditional-Access-Richtlinien', path: '/identity/conditionalAccess/policies?$select=id,displayName,state,createdDateTime,modifiedDateTime&$top=999' },
+      securityDefaults: { label: 'Security Defaults', path: '/policies/identitySecurityDefaultsEnforcementPolicy', single: true },
+      skus: { label: 'Lizenzabhängigkeiten', path: '/subscribedSkus?$select=skuId,skuPartNumber,prepaidUnits,capabilityStatus,servicePlans' },
+      users: { label: 'Lizenzabdeckung', path: '/users?$select=id,displayName,userPrincipalName,accountEnabled,userType,assignedLicenses&$top=999' },
+    }, progress);
+    const failed = new Set(failures.map(({ label }) => label));
+    return includePartialFailures(analyseAccess(failed.has('Conditional-Access-Richtlinien') ? undefined : data.policies, failed.has('Lizenzabhängigkeiten') ? undefined : data.skus, failed.has('Lizenzabdeckung') ? undefined : data.users, failed.has('Security Defaults') ? undefined : data.securityDefaults), failures, 'access', allFailed);
   },
   async licenses(token, progress) {
     const [{ data, failures }, prices] = await Promise.all([

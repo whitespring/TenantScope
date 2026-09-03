@@ -42,7 +42,7 @@ Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter
 | Tenant & Domains | `Domain.Read.All` |
 | Benutzer & Gäste | `User.Read.All` |
 | Rollen | `RoleManagement.Read.Directory` |
-| Conditional Access | `Policy.Read.All` |
+| Conditional Access | `Policy.Read.All`, `LicenseAssignment.Read.All`, `User.Read.All` |
 | Lizenzoptimierung | `LicenseAssignment.Read.All`, `User.Read.All`, `Reports.Read.All`, `ReportSettings.Read.All` |
 | Nutzung/Speicher | `Reports.Read.All`, `ReportSettings.Read.All`, `User.Read.All` |
 | Teams & Gruppen | `Group.Read.All` |
@@ -54,7 +54,7 @@ Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter
 | Purview | `RecordsManagement.Read.All`, `eDiscovery.Read.All` |
 | Service Health | `ServiceHealth.Read.All`, `ServiceMessage.Read.All` |
 
-Für die M365-Reports braucht das anmeldende Konto beispielsweise **Reports Reader**; für SharePoint-Tenant-Einstellungen **Global Reader** oder **SharePoint Administrator**; Purview/eDiscovery benötigt zusätzlich eine passende Purview-Rolle. Copilot-Abfragen liefern nur Daten, wenn der Dienst im Tenant lizenziert ist.
+Für die M365-Reports braucht das anmeldende Konto beispielsweise **Reports Reader**; für SharePoint-Tenant-Einstellungen **Global Reader** oder **SharePoint Administrator**; Purview/eDiscovery benötigt zusätzlich eine passende Purview-Rolle. Copilot-Abfragen liefern nur Daten, wenn der Dienst im Tenant lizenziert ist. Conditional Access wird nicht pauschal empfohlen: TenantScope gleicht Entra-ID-P1/P2-Seats, Zuweisungen und Security Defaults ab. Ohne P1/P2 wird Security Defaults als lizenzfreie Basis bewertet; risikobasierte Richtlinien werden nur bei P2-Abdeckung empfohlen.
 
 Microsofts anonymisierte Report-Kennungen lassen sich nicht auf Benutzer zurückrechnen. Die Schaltfläche **Tenantweit Klarnamen aktivieren** fordert deshalb bei Bedarf dynamisch `ReportSettings.ReadWrite.All` mit Admin-Consent an und setzt `displayConcealedNames` auf `false`. Diese Änderung betrifft die Microsoft-365-Nutzungsreports tenantweit, wird protokolliert und kann einige Minuten bis zur Wirkung benötigen.
 

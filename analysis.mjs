@@ -147,25 +147,77 @@ export function analyseRoles(assignments = []) {
   };
 }
 
-export function analyseAccess(policies = []) {
+const licensedFeatures = [
+  { key: 'entraP1', label: 'Conditional Access', requirement: 'Entra ID P1/P2', plans: ['41781fb2-bc02-4b7c-bd55-b576c07bb09d', 'eec0eb4f-6444-4f95-aba0-50c24d67f998'], tenantwide: true },
+  { key: 'entraP2', label: 'Risikobasierter Zugriff / Identity Protection', requirement: 'Entra ID P2', plans: ['eec0eb4f-6444-4f95-aba0-50c24d67f998'], tenantwide: true },
+  { key: 'governance', label: 'PIM und Access Reviews', requirement: 'Entra ID P2 oder Entra ID Governance', plans: ['eec0eb4f-6444-4f95-aba0-50c24d67f998', 'e866a266-3cff-43a3-acca-0c90a7e00c8b'], sku: /IDENTITY.*GOVERNANCE|ENTRA.*SUITE/i },
+  { key: 'intune', label: 'Intune-Geräteverwaltung', requirement: 'Intune Plan 1 oder höher', plans: ['c1ec4a95-1f05-45b3-a911-aa3fa01094f5', 'd216f254-796f-4dab-bbfa-710686e646b9'] },
+  { key: 'copilot', label: 'Microsoft 365 Copilot', requirement: 'Copilot-Add-on plus Basislizenz', sku: /MICROSOFT_365_COPILOT|COPILOT_FOR_MICROSOFT_365/i, plan: /M365_COPILOT_|COPILOT.*M365/i },
+  { key: 'purview', label: 'Purview Premium (Audit/eDiscovery)', requirement: 'Passende E5- oder Purview-Add-on-Lizenz', plans: ['2f442157-a11c-46b9-ae5b-6e39ff4e5849', '4de31727-a228-4ec3-a5bf-8e45b5ca48cc'] },
+];
+
+function featureCoverage(skus = [], users = [], feature) {
+  const matchingPlans = (sku) => (sku.servicePlans || []).filter((plan) => plan.provisioningStatus !== 'Disabled'
+    && (feature.plans?.includes(normalized(plan.servicePlanId)) || feature.plan?.test(plan.servicePlanName || '')));
+  const eligible = skus.filter((sku) => ['Enabled', 'Warning'].includes(sku.capabilityStatus)
+    && (feature.sku?.test(sku.skuPartNumber || '') || matchingPlans(sku).length));
+  const byId = new Map(eligible.map((sku) => [normalized(sku.skuId), sku]));
+  const activeMembers = users.filter((user) => user.accountEnabled !== false && user.userType !== 'Guest');
+  const assigned = activeMembers.filter((user) => (user.assignedLicenses || []).some((license) => {
+    const sku = byId.get(normalized(license.skuId));
+    if (!sku) return false;
+    if (feature.sku?.test(sku.skuPartNumber || '')) return true;
+    const disabled = new Set((license.disabledPlans || []).map(normalized));
+    return matchingPlans(sku).some((plan) => !disabled.has(normalized(plan.servicePlanId)));
+  })).length;
+  const seats = eligible.reduce((sum, sku) => sum + Number(sku.prepaidUnits?.enabled || 0), 0);
+  return { assigned, seats, target: activeMembers.length };
+}
+
+function licenseDependencyRows(skus, users) {
+  return licensedFeatures.map((feature) => {
+    const coverage = featureCoverage(skus, users, feature);
+    const status = !coverage.seats ? 'Nicht lizenziert' : feature.tenantwide
+      ? (coverage.assigned >= coverage.target ? 'Tenantweit abgedeckt' : `${coverage.assigned}/${coverage.target} aktive Mitglieder`)
+      : `${coverage.assigned} aktive Zuweisungen`;
+    return [feature.label, feature.requirement, String(coverage.seats), String(coverage.assigned), status];
+  });
+}
+
+export function analyseAccess(policies, skus, users, securityDefaults) {
+  const policiesKnown = Array.isArray(policies);
+  policies ||= [];
   const enabledPolicies = policies.filter((policy) => policy.state === 'enabled');
   const disabledPolicies = policies.filter((policy) => policy.state === 'disabled');
   const findings = [];
+  const licenseKnown = Array.isArray(skus) && Array.isArray(users);
+  const coverage = licenseKnown ? featureCoverage(skus, users, licensedFeatures[0]) : null;
+  const defaultsKnown = typeof securityDefaults?.isEnabled === 'boolean';
+  const defaultsEnabled = securityDefaults?.isEnabled === true;
 
-  if (!enabledPolicies.length) findings.push(finding('high', 'Keine aktive Conditional-Access-Richtlinie gefunden', 'Microsoft Graph liefert keine Richtlinie im Zustand „enabled“. Report-only-Richtlinien setzen keine Zugriffsentscheidung durch.', 'Mindestens MFA, Legacy-Authentifizierung und Gerätezustand über Conditional Access absichern.'));
+  if (policiesKnown && !enabledPolicies.length && !licenseKnown) findings.push(finding('high', 'Keine aktive Conditional-Access-Richtlinie gefunden', 'Microsoft Graph liefert keine Richtlinie im Zustand „enabled“. Die Lizenzabdeckung konnte nicht geprüft werden.', 'Lizenzabdeckung prüfen und abhängig davon Security Defaults oder Conditional Access einsetzen.'));
+  else if (policiesKnown && !enabledPolicies.length && !coverage.seats) findings.push(finding(defaultsEnabled ? 'ok' : 'medium', defaultsEnabled ? 'Security Defaults sind aktiv' : 'Kein lizenzierter Basisschutz erkannt', `Im Tenant wurden keine Entra-ID-P1/P2-Seats erkannt. Conditional Access ist damit nicht die passende Empfehlung; Security Defaults sind ${defaultsEnabled ? 'als lizenzfreie Basis aktiv' : defaultsKnown ? 'deaktiviert' : 'nicht lesbar'}.`, defaultsEnabled ? 'Security Defaults beibehalten und regelmäßig prüfen; für granularere Regeln Entra ID P1 für alle betroffenen Benutzer einplanen.' : 'Security Defaults als lizenzfreie Basis aktivieren oder Entra ID P1 für alle von Conditional Access betroffenen Benutzer lizenzieren.'));
+  else if (policiesKnown && !enabledPolicies.length && coverage.assigned < coverage.target) findings.push(finding(defaultsEnabled ? 'info' : 'medium', `Conditional Access nicht tenantweit lizenziert (${coverage.assigned}/${coverage.target})`, `P1/P2 ist nur ${coverage.assigned} von ${coverage.target} aktiven Mitgliedern zugewiesen. Für eine tenantweite Conditional-Access-Basis reicht diese Abdeckung nicht.`, defaultsEnabled ? 'Security Defaults als tenantweiten Basisschutz beibehalten und P1/P2 nur bei geplanter vollständiger Abdeckung ausbauen.' : 'Lizenzumfang und Zielgruppe klären; bis zur vollständigen Abdeckung Security Defaults als Basisschutz verwenden.'));
+  else if (policiesKnown && !enabledPolicies.length) findings.push(finding('high', 'Keine aktive Conditional-Access-Richtlinie gefunden', `P1/P2 ist ${coverage.assigned} von ${coverage.target} aktiven Mitgliedern zugewiesen, aber Microsoft Graph liefert keine Richtlinie im Zustand „enabled“.`, 'Basisrichtlinien zunächst im Report-only-Modus testen und anschließend gestuft aktivieren.'));
+  if (policiesKnown && enabledPolicies.length && licenseKnown && coverage.assigned < coverage.target) findings.push(finding('high', `Conditional-Access-Lizenzabdeckung unvollständig (${coverage.assigned}/${coverage.target})`, 'Aktive Richtlinien wurden gefunden, die vorhandenen P1/P2-Zuweisungen belegen aber keine tenantweite Lizenzabdeckung.', 'Zielgruppen der Richtlinien und P1/P2-Zuweisungen abgleichen; jeder betroffene Benutzer benötigt eine passende Lizenz.'));
   if (disabledPolicies.length) findings.push(finding('info', `${disabledPolicies.length} deaktivierte Conditional-Access-Richtlinien`, 'Deaktivierte Richtlinien erhöhen nicht den Schutz und können auf Altbestand hinweisen.', 'Dokumentieren, archivieren oder reaktivieren, sofern weiterhin erforderlich.'));
-  if (!findings.length) findings.push(finding('ok', 'Conditional Access ist aktiv', 'Mindestens eine aktive Richtlinie wurde gefunden.', 'Ausschlüsse, Break-glass-Konten und Richtlinienwirkung regelmäßig testen.'));
+  if (!findings.length && policiesKnown && enabledPolicies.length) findings.push(finding('ok', licenseKnown ? 'Conditional Access ist aktiv und lizenziert' : 'Conditional Access ist aktiv', licenseKnown ? 'Mindestens eine aktive Richtlinie und eine ausreichende P1/P2-Zuweisung für die aktiven Mitglieder wurden gefunden.' : 'Mindestens eine aktive Richtlinie wurde gefunden; die Lizenzabdeckung konnte nicht geprüft werden.', 'Ausschlüsse, Break-glass-Konten, Lizenzabdeckung und Richtlinienwirkung regelmäßig testen.'));
 
   return {
     records: policies.length,
-    summary: `${policies.length} Conditional-Access-Richtlinien geprüft`,
-    metrics: [[String(policies.length), 'Richtlinien'], [String(enabledPolicies.length), 'aktiv'], [String(disabledPolicies.length), 'deaktiviert']],
+    summary: `${policies.length} Conditional-Access-Richtlinien und Lizenzabdeckung geprüft`,
+    metrics: [[policiesKnown ? String(policies.length) : '–', 'Richtlinien'], [policiesKnown ? String(enabledPolicies.length) : '–', 'aktiv'], [coverage ? `${coverage.assigned}/${coverage.target}` : '–', 'P1/P2-Abdeckung'], [defaultsKnown ? (defaultsEnabled ? 'Aktiv' : 'Nein') : '–', 'Security Defaults']],
     findings,
     details: {
       title: 'Conditional-Access-Richtlinien',
       columns: ['Richtlinie', 'Status', 'Erstellt', 'Geändert'],
       rows: policies.map((policy) => [policy.displayName || policy.id, policy.state || '–', date(policy.createdDateTime), date(policy.modifiedDateTime)]),
     },
+    extraDetails: licenseKnown ? [{
+      title: 'Lizenzabhängigkeiten',
+      columns: ['Funktion', 'Lizenzvoraussetzung', 'Aktivierte Seats', 'Aktiv zugewiesen', 'Abdeckung'],
+      rows: licenseDependencyRows(skus, users),
+    }] : [],
   };
 }
 
@@ -335,6 +387,11 @@ export function analyseLicenses(skus, users = [], prices = new Map(), usage) {
           const monthly = chargeable.every((item) => item.price != null) ? money(chargeable.reduce((sum, item) => sum + Number(item.price || 0), 0)) : '–';
           return [name(user), user.userPrincipalName || '–', user.accountEnabled ? 'Ja' : 'Nein', sortedList(items.map((item) => item.sku.skuPartNumber)), sortedList(items.map((item) => item.source)), sortedList(items.map((item) => item.state?.state || '–')), String(items.reduce((sum, item) => sum + item.disabledPlans.length, 0)), monthly];
         }).sort((left, right) => compareTableValues(left[0], right[0])),
+      },
+      {
+        title: 'Lizenzabhängigkeiten und Funktionsabdeckung',
+        columns: ['Funktion', 'Lizenzvoraussetzung', 'Aktivierte Seats', 'Aktiv zugewiesen', 'Abdeckung'],
+        rows: licenseDependencyRows(skus, users),
       },
     ],
   };
