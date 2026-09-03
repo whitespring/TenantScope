@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T17:06:00Z",
+  "title": "Design System: TenantScope",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "neutral", "displayName": "Arbeitsink", "canonical": "#111827", "tonalRamp": ["#111827", "#26303f", "#46505d", "#68717b", "#9299a1", "#bdc1c5", "#e2e4e6", "#f7f8f8"] },
+      "cyan": { "role": "primary", "displayName": "whitespring Cyan", "canonical": "#049bc4", "tonalRamp": ["#063544", "#07536a", "#087591", "#049bc4", "#36b6d8", "#7bd0e7", "#bdeafa", "#edfaff"] },
+      "action-yellow": { "role": "secondary", "displayName": "Aktionsgelb", "canonical": "#f7c80d", "tonalRamp": ["#3a2e02", "#665103", "#967803", "#cda604", "#f7c80d", "#f9d957", "#fbe99a", "#fff9dc"] },
+      "paper": { "role": "neutral", "displayName": "Papierweiß", "canonical": "#ffffff", "tonalRamp": ["#242424", "#484848", "#6d6d6d", "#929292", "#b6b6b6", "#d4d4d4", "#eeeeee", "#ffffff"] },
+      "soft": { "role": "neutral", "displayName": "Arbeitsgrau", "canonical": "#f4f5f3", "tonalRamp": ["#242623", "#484b46", "#6c7069", "#92978f", "#b8bcb6", "#d5d8d3", "#eaebe8", "#f8f9f7"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Exo-2-Arbeitstitel", "purpose": "Seitentitel und zentrale Zustände." },
+      "body": { "displayName": "Systemtext", "purpose": "Dichte Analyse-, Hilfe- und Tabellendaten." },
+      "label": { "displayName": "Arbeitslabel", "purpose": "Navigation, Felder und Aktionen." }
+    },
+    "shadows": [
+      { "name": "modal-only", "value": "0 24px 80px rgba(16,42,58,.3)", "purpose": "Nur für Dialoge, die tatsächlich über der Arbeitsfläche liegen." }
+    ],
+    "motion": [
+      { "name": "state-change", "value": "180ms ease", "purpose": "Kurze Hover-, Fokus- und Navigationszustände." },
+      { "name": "active-inventory-row", "value": "1.8s ease-in-out infinite", "purpose": "Zeigt ausschließlich am laufenden Queue-Datensatz fortgesetzte Aktivität." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-workspace", "value": "780px" },
+      { "name": "compact-mobile", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Einziger führender Schritt auf einer Arbeitsfläche.",
+      "html": "<button class=\"ds-button-primary\">Weiter zum Prüfumfang <svg aria-hidden=\"true\" viewBox=\"0 0 16 16\"><path d=\"M3 8h9M8.5 4.5 12 8l-3.5 3.5\"/></svg></button>",
+      "css": ".ds-button-primary{min-height:44px;padding:0 18px;display:inline-flex;align-items:center;gap:12px;border:0;border-radius:4px;color:#111827;background:#f7c80d;font:700 14px/1 ui-sans-serif,sans-serif}.ds-button-primary svg{width:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}.ds-button-primary:hover{background:#e4b718}.ds-button-primary:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "description": "Zurückhaltende Nebenaktion.",
+      "html": "<button class=\"ds-button-secondary\">Sitzung löschen</button>",
+      "css": ".ds-button-secondary{min-height:44px;padding:0 18px;border:1px solid #d5dade;border-radius:4px;color:#111827;background:#fff;font:700 14px/1 ui-sans-serif,sans-serif}.ds-button-secondary:hover{border-color:#049bc4}.ds-button-secondary:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Ruhiges Eingabefeld für Tenant- und App-Konfiguration.",
+      "html": "<label class=\"ds-field\"><span>Tenant-ID oder Domain</span><input placeholder=\"contoso.onmicrosoft.com\"></label>",
+      "css": ".ds-field{display:grid;gap:7px;color:#3f4045;font:700 14px/1.2 ui-sans-serif,sans-serif}.ds-field input{height:50px;padding:0 14px;border:1px solid #cfd6da;border-radius:3px;color:#111827;background:#fff;font:400 16px/1 ui-sans-serif,sans-serif}.ds-field input::placeholder{color:#66707c}.ds-field input:focus{border-color:#049bc4;outline:3px solid rgba(4,155,196,.16);outline-offset:2px}"
+    },
+    {
+      "name": "Workflow Navigation",
+      "kind": "nav",
+      "description": "Leise dreistufige Prozessnavigation mit Cyan-Unterstreichung.",
+      "html": "<nav class=\"ds-nav\"><button class=\"active\">Tenant verbinden</button><button>Prüfumfang</button><button disabled>Übersicht</button></nav>",
+      "css": ".ds-nav{display:flex;gap:32px;border-bottom:1px solid #dfe3e6}.ds-nav button{position:relative;min-height:52px;padding:0;border:0;color:#66707c;background:transparent;font:700 14px/1 ui-sans-serif,sans-serif}.ds-nav button.active{color:#111827}.ds-nav button.active::after{content:'';position:absolute;right:0;bottom:-1px;left:0;height:3px;background:#049bc4}.ds-nav button:disabled{opacity:.36}.ds-nav button:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}"
+    },
+    {
+      "name": "Open Metric",
+      "kind": "card",
+      "description": "Tonale Kennzahl ohne eigenen Kartenrahmen.",
+      "html": "<button class=\"ds-metric\"><small>Gastkonten</small><strong>31</strong><span>Details filtern</span></button>",
+      "css": ".ds-metric{min-height:126px;padding:20px;border:0;border-radius:0;color:#111827;background:#f4f5f3;text-align:left}.ds-metric small{display:block;color:#66707c;font:800 10px/1.2 ui-sans-serif,sans-serif;letter-spacing:.08em;text-transform:uppercase}.ds-metric strong{display:block;margin:13px 0 4px;font:700 31px/1 'Exo 2',ui-sans-serif,sans-serif}.ds-metric span{display:block;margin-top:16px;color:#087896;font:700 10px/1.2 ui-sans-serif,sans-serif}.ds-metric:hover{box-shadow:inset 0 -3px 0 #049bc4}.ds-metric:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Der Vimeo-Arbeitsraum",
+    "overview": "TenantScope verbindet die ruhige, inhaltszentrierte Arbeitsfläche von Vimeo mit der whitespring-Identität. Das offizielle W, kräftige Exo-2-Titel und wenige präzise Cyan- und Gelbakzente geben Orientierung, während die komplexe Inventur auf einer offenen weißen Bühne arbeitet. Die Oberfläche ist bewusst nicht als Sammlung umrandeter Karten gedacht.",
+    "keyCharacteristics": ["Offene, ruhige Arbeitsfläche statt Dashboard-Kachelwand.", "whitespring-W und Exo 2 als klare Markenanker.", "Gelb nur für die primäre Aktion, Cyan für Navigation und Status.", "Tabellen, Befunde und Formulare bleiben scanbar und responsiv."],
+    "rules": [
+      { "name": "The Two-Accent Rule", "body": "Gelb markiert die nächste Hauptaktion; Cyan markiert Orientierung, Links, Fortschritt und Auswahlzustände.", "section": "colors" },
+      { "name": "The No-Eyebrow Rule", "body": "Überschriften stehen ohne dekorative, wiederholende Kategorienzeile.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Laufende Inhalte liegen flach; Schatten sind ausschließlich für echte Überlagerungen reserviert.", "section": "elevation" }
+    ],
+    "dos": ["Do echte Zustände, Fortschritt und den aktuellen Datensatz klar anzeigen.", "Do Detailtiefe über Typografie, Weißraum und Linien staffeln.", "Do ausschließlich das offizielle whitespring-W und die gemeinsame SVG-Icon-Sprache verwenden."],
+    "donts": ["Don't Inhalte in viele gleich gewichtete, umrandete Boxen zerlegen.", "Don't dekorative Eyebrows über selbsterklärende Überschriften setzen.", "Don't Gelb als allgemeine Dekorfarbe oder Cyan für unbedeutende Elemente verwenden."]
+  }
+}

@@ -1,0 +1,11 @@
+index.html
+auth.html
+auth.js
+app.js
+analysis.mjs
+docx.mjs
+styles.css
+workspace.css
+assets
+node_modules/@azure/msal-browser/dist
+node_modules/@azure/msal-common/dist-browser

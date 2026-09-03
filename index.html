@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com https://reports.office.com; script-src 'self' 'sha256-3uD2HNHhfgKfWn9tw8dp06x/sM6qd7ZM4HK4NJxQNSU='; style-src 'self'; img-src 'self' data:; frame-src https://login.microsoftonline.com; object-src 'none'; base-uri 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Lokaler Proof of Concept für eine Microsoft-365-Governance-Inventur."
+    />
+    <title>TenantScope – M365 Governance Check</title>
+    <link rel="icon" href="assets/brand/whitespring-w.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="workspace.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="#setup" aria-label="TenantScope Startseite">
+        <img src="assets/brand/whitespring-w.svg" alt="" width="38" height="38" />
+        <span>TenantScope</span>
+      </a>
+
+      <nav class="side-nav" id="side-nav" aria-label="Arbeitsablauf">
+        <button class="side-nav-item active" type="button" data-app-view="setup" data-step="1">
+          <span class="nav-index">1</span><span><strong>Tenant verbinden</strong><small>Zugang und Konfiguration</small></span>
+        </button>
+        <button class="side-nav-item" type="button" data-app-view="scope" data-step="2">
+          <span class="nav-index">2</span><span><strong>Prüfumfang</strong><small>Analysebereiche auswählen</small></span>
+        </button>
+        <button class="side-nav-item" id="report-overview-nav" type="button" data-app-view="report" data-step="3" disabled>
+          <span class="nav-index">3</span><span><strong>Übersicht</strong><small>Ergebnisse und Risiken</small></span>
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <a href="https://www.whitespring.de/datenschutz/" target="_blank" rel="noreferrer">Datenschutz</a>
+        <a href="https://www.whitespring.de/impressum/" target="_blank" rel="noreferrer">Impressum</a>
+        <button class="button button-ghost button-small" id="reset-session" type="button">
+          Sitzung löschen
+        </button>
+      </div>
+    </header>
+
+    <nav class="report-nav" id="report-nav" hidden aria-label="Berichtsbereiche"></nav>
+
+    <main class="app-shell">
+      <div class="workspace">
+        <section class="section-block" id="setup" aria-labelledby="setup-title">
+          <div class="section-heading">
+            <div>
+              <span class="section-number">01</span>
+              <p class="eyebrow">Tenant verbinden</p>
+              <h2 id="setup-title">Microsoft Graph autorisieren</h2>
+              <p class="section-intro">Verbinden Sie TenantScope mit Ihrem Microsoft-365-Tenant. Die Inventur arbeitet mit delegiertem Zugriff und den von Ihnen gewählten Prüfbereichen.</p>
+              <span class="save-status" id="save-status" aria-live="polite">Noch nicht gespeichert</span>
+            </div>
+          </div>
+
+          <div class="setup-layout">
+            <div class="setup-main">
+              <form id="tenant-form">
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Tenant-ID oder Domain <b>*</b></span>
+                    <input name="tenant" autocomplete="off" placeholder="contoso.onmicrosoft.com" pattern="^(?!(common|organizations|consumers|adfs)$)[a-zA-Z0-9.-]+$" title="Konkrete Tenant-ID oder Tenant-Domain, nicht common/organizations/consumers" required />
+                  </label>
+                  <label class="field">
+                    <span>Application (Client) ID <b>*</b></span>
+                    <input name="clientId" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" required />
+                  </label>
+                  <label class="field field-wide">
+                    <span>SPA Redirect-URI</span>
+                    <input name="redirectUri" readonly />
+                  </label>
+                  <label class="field field-wide">
+                    <span>Optionale Netto-SKU-Preise <em>für das Einsparpotenzial</em></span>
+                    <input name="priceFile" type="file" accept=".csv,text/csv" />
+                  </label>
+                </div>
+                <p class="form-hint">Microsoft Graph enthält keine Vertragspreise. CSV-Format: <code>sku;preisProMonat</code>, z. B. <code>SPE_E3;35,70</code>. Die Datei bleibt im Browser.</p>
+                <div class="report-names">
+                  <p>
+                    <strong>Klarnamen in Nutzungsreports <em>optional</em></strong>
+                    <span>Die Inventur funktioniert auch mit anonymisierten Kennungen. Optional kann ein Administrator Klarnamen tenantweit aktivieren; Microsoft protokolliert die Änderung und die Übernahme kann einige Minuten dauern.</span>
+                  </p>
+                  <button class="button button-secondary" id="reveal-report-names" type="button" disabled>Tenantweit Klarnamen aktivieren</button>
+                </div>
+                <p class="auth-message" id="auth-message" role="alert" hidden></p>
+              </form>
+
+              <div class="start-row setup-next">
+                <p><strong>Tenant-Daten vollständig?</strong><span>Im nächsten Schritt wählen Sie den Prüfumfang und starten die Live-Inventur.</span></p>
+                <button class="button button-primary" id="continue-to-scope" type="button" disabled>
+                  Weiter zum Prüfumfang <span class="icon icon-arrow-right" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+
+            <aside class="setup-help" aria-label="Einrichtungshilfe">
+              <span class="local-pill"><span></span> Keine Cloud-Übertragung</span>
+              <details class="setup-guide" open>
+                <summary>Was wird benötigt?</summary>
+                <ol>
+                  <li>Eine Single-Tenant-App in Microsoft Entra.</li>
+                  <li>Die angezeigte URI als Single-Page-App.</li>
+                  <li>Delegierte Microsoft-Graph-Leserechte.</li>
+                  <li>Tenant-ID und Application-ID – kein Client-Secret.</li>
+                </ol>
+                <a href="https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank" rel="noreferrer">App-Registrierungen in Entra öffnen <span class="icon icon-external-link" aria-hidden="true"></span></a>
+              </details>
+              <div class="privacy-note">
+                <span class="privacy-check" aria-hidden="true"><span class="icon icon-check"></span></span>
+                <p><strong>Datenschutz by design</strong>Token und Konfiguration liegen im Sitzungsspeicher. Zwei Download-Reports werden flüchtig über diesen Server abgerufen und nicht gespeichert. Serverstandort: Deutschland.</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section-block" id="scope" aria-labelledby="scope-title">
+          <div class="section-heading scope-heading">
+            <div>
+              <span class="section-number">02</span>
+              <p class="eyebrow">Prüfumfang</p>
+              <h2 id="scope-title">Was soll analysiert werden?</h2>
+            </div>
+            <div class="text-actions">
+              <button type="button" id="select-all">Alle auswählen</button>
+              <span></span>
+              <button type="button" id="select-none">Keine</button>
+            </div>
+          </div>
+
+          <div class="scope-grid" id="scope-grid"></div>
+
+          <div class="start-row">
+            <p><strong id="selection-count">0 Bereiche ausgewählt</strong><span>Je nach Tenant einige Minuten</span></p>
+            <div class="start-actions">
+              <button class="button button-secondary" id="grant-consent" type="button" disabled>Adminfreigabe</button>
+              <button class="button button-primary" id="start-inventory" type="button" disabled>
+                Anmelden & Inventur starten <span class="icon icon-arrow-right" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="run-panel" id="run-panel" hidden aria-live="polite">
+          <div class="spinner" aria-hidden="true"></div>
+          <h2 id="run-title">Microsoft-Anmeldung wird vorbereitet …</h2>
+          <div class="progress-track"><span id="progress-bar"></span></div>
+          <p id="run-progress">0 %</p>
+          <ol class="run-queue" id="run-queue" aria-label="Fortschritt der Inventur"></ol>
+        </section>
+
+        <section class="report" id="report" hidden aria-labelledby="report-title">
+          <div class="report-toolbar">
+            <div>
+              <p class="eyebrow">Live-Bericht · Microsoft Graph</p>
+              <h2 id="report-title">Governance-Inventur</h2>
+            </div>
+            <div class="export-actions" aria-label="Bericht exportieren">
+              <button class="button button-secondary" type="button" data-export="pdf">PDF</button>
+              <button class="button button-secondary" type="button" data-export="md">Markdown</button>
+              <button class="button button-primary" type="button" data-export="docx">DOCX</button>
+            </div>
+          </div>
+          <div id="report-content"></div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <span>TenantScope von whitespring</span>
+      <nav aria-label="Rechtliche Hinweise">
+        <button id="open-usage-notice" type="button">Nutzungshinweise</button>
+        <a href="https://www.whitespring.de/datenschutz/" target="_blank" rel="noreferrer">Datenschutz</a>
+        <a href="https://www.whitespring.de/impressum/" target="_blank" rel="noreferrer">Impressum</a>
+      </nav>
+    </footer>
+
+    <dialog class="legal-dialog" id="usage-notice-dialog" aria-labelledby="usage-notice-title">
+      <form id="usage-notice-form">
+        <div class="legal-dialog-heading">
+          <span class="legal-mark" aria-hidden="true">!</span>
+          <div>
+            <h2 id="usage-notice-title">Nutzungshinweis und Haftungsausschluss</h2>
+          </div>
+        </div>
+        <div class="legal-copy">
+          <p>TenantScope erstellt eine automatisierte Momentaufnahme aus den Daten, die Microsoft Graph zum Prüfzeitpunkt bereitstellt. Ergebnisse können unvollständig, verzögert oder aufgrund fehlender Rechte und Lizenzen nicht auswertbar sein.</p>
+          <ul>
+            <li>Verwenden Sie die Anwendung nur für Tenants, zu deren Prüfung Sie berechtigt sind.</li>
+            <li>Prüfen Sie Befunde und Empfehlungen fachlich, bevor Sie Konfigurationen, Zugriffe oder Lizenzen ändern.</li>
+            <li>TenantScope ersetzt keine Rechts-, Datenschutz-, Sicherheits- oder Lizenzberatung. Die Verantwortung für Entscheidungen und Änderungen bleibt bei Ihnen.</li>
+            <li>Die Inventur ist grundsätzlich lesend. Nur die gesondert gekennzeichnete Option „Tenantweit Klarnamen aktivieren“ ändert eine Microsoft-365-Reporteinstellung.</li>
+          </ul>
+          <p>Informationen zur Verarbeitung finden Sie im <a href="https://www.whitespring.de/datenschutz/" target="_blank" rel="noreferrer">Datenschutz</a>. Anbieterangaben stehen im <a href="https://www.whitespring.de/impressum/" target="_blank" rel="noreferrer">Impressum</a>.</p>
+        </div>
+        <label class="legal-confirm">
+          <input id="accept-usage-notice" type="checkbox" required />
+          <span>Ich bin zur Prüfung des Tenants berechtigt und habe die Nutzungshinweise verstanden.</span>
+        </label>
+        <button class="button button-primary" id="confirm-usage-notice" type="submit" disabled>Verstanden und fortfahren</button>
+      </form>
+    </dialog>
+
+    <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-dialog-title">
+      <form id="export-form">
+        <div class="export-dialog-heading">
+          <h2 id="export-dialog-title">Export konfigurieren</h2>
+          <p>Tenant-Metadaten werden immer aufgenommen. Wählen Sie die gewünschten Berichtsteile.</p>
+        </div>
+        <fieldset class="export-options">
+          <legend>Inhalte</legend>
+          <label><input type="checkbox" name="summary" checked><span><strong>Zusammenfassung & Kennzahlen</strong><small>Governance-Indikator und Risikozahlen</small></span></label>
+          <label><input type="checkbox" name="recommendations"><span><strong>Empfehlungsübersicht</strong><small>Kompakte Maßnahmen mit Hilfe- und Admin-Links</small></span></label>
+          <label><input type="checkbox" name="findings" checked><span><strong>Priorisierte Befunde</strong><small>Nach Schwere sortierte Feststellungen</small></span></label>
+          <label><input type="checkbox" name="inventory" checked><span><strong>Inventurübersicht</strong><small>Status aller ausgewerteten Bereiche</small></span></label>
+          <label><input type="checkbox" name="goodPractice" checked><span><strong>Good Practice je Bereich</strong><small>Orientierung sowie Hilfe- und Admin-Links</small></span></label>
+          <label><input type="checkbox" name="details" checked><span><strong>Detailtabellen</strong><small>Betroffene Benutzer, Objekte und Konfigurationen</small></span></label>
+          <label><input type="checkbox" name="serviceHealth"><span><strong>Service Health & Message Center</strong><small>Zeitabhängige Betriebsinformationen am Berichtsende</small></span></label>
+        </fieldset>
+        <div class="export-dialog-actions">
+          <button class="button button-secondary" id="cancel-export" type="button">Abbrechen</button>
+          <button class="button button-primary" id="confirm-export" type="submit">Exportieren</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="importmap">{"imports":{"@azure/msal-browser":"./node_modules/@azure/msal-browser/dist/index.mjs","@azure/msal-common/browser":"./node_modules/@azure/msal-common/dist-browser/index-browser.mjs"}}</script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

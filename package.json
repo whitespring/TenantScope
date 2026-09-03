@@ -1,0 +1,11 @@
+{
+  "name": "m365-governance-platform",
+  "private": true,
+  "scripts": {
+    "start": "python3 server.py --port 4173 --serve-static",
+    "test": "node auth.test.mjs && node analysis.test.mjs && node docx.test.mjs && node security.test.mjs && python3 server.py --self-test"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "5.21.0"
+  }
+}

@@ -1,0 +1,32 @@
+[Unit]
+Description=TenantScope Microsoft 365 report proxy
+After=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/tenantscope
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -I /opt/tenantscope/server.py --port 8080
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @swap @reboot @raw-io @obsolete @debug @cpu-emulation @module
+UMask=0077
+TasksMax=32
+MemoryMax=384M
+
+[Install]
+WantedBy=multi-user.target
