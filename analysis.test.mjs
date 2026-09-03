@@ -141,8 +141,8 @@ const publicShareScreening = screenPublicShares(
     { id: 'deleted', shared: { scope: 'anonymous' }, deleted: {} },
   ]]]),
 );
-assert.deepEqual([publicShareScreening.screenedItems, publicShareScreening.sharedRoots, publicShareScreening.unclassified, publicShareScreening.candidates.length], [4, 3, 1, 1]);
-assert.deepEqual(publicShareScreening.itemsByDrive.get('d1').map(({ id }) => id), ['public']);
+assert.deepEqual([publicShareScreening.screenedItems, publicShareScreening.sharedRoots, publicShareScreening.unclassified, publicShareScreening.candidates.length], [4, 3, 1, 2]);
+assert.deepEqual(publicShareScreening.itemsByDrive.get('d1').map(({ id }) => id), ['public', 'unknown']);
 
 const sharing = analyseSharing(
   [{ id: 'd1', name: 'Dokumente', owner: { user: { displayName: 'Ada' } } }],
@@ -170,6 +170,18 @@ const authenticatedSharing = analyseSharing(
 );
 assert.equal(authenticatedSharing.metrics[1][0], '0');
 assert.equal(authenticatedSharing.findings[0].severity, 'ok');
+
+const resolvedFallbackSharing = analyseSharing(
+  [{ id: 'd1', name: 'Dokumente' }],
+  new Map([['d1', [{ id: 'i1', name: 'Ohne Hinweis', file: {}, shared: {} }]]]),
+  new Map([['d1:i1', [{ roles: ['read'], link: { scope: 'organization' } }]]]),
+  new Date(),
+  0,
+  new Map(),
+  { sharedRoots: 1, unclassified: 1 },
+);
+assert.equal(resolvedFallbackSharing.unavailable, 0);
+assert.equal(resolvedFallbackSharing.findings[0].severity, 'ok');
 
 const throttledSharing = analyseSharing(
   [{ id: 'd1', name: 'Dokumente' }],

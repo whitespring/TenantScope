@@ -20,7 +20,7 @@ Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter
 - klickbare Kennzahlen als Detailfilter sowie durchsuchbare, sortierbare Tabellen mit 10er-Pagination
 - nach Schwere priorisierte Live-Befunde, Good-Practice-Hinweise und Detailtabellen der betroffenen Objekte
 - 15 getrennt auswählbare Bereiche: Tenant, Benutzer, Rollen, Conditional Access, Lizenzen/Kosten, Nutzung, Speicher, Teams/Gruppen, SharePoint, öffentliche Freigaben, Entra-Geräte, Apps, Secure Score, Purview und Service Health
-- skalierbares Freigabe-Screening: Delta liefert Freigabe-Wurzeln, Detailberechtigungen werden nur für anonyme Link-Kandidaten gelesen; interne und personengebundene Freigaben erzeugen keine Einzelabfragen
+- skalierbares Freigabe-Screening: Delta liefert Freigabe-Wurzeln, Detailberechtigungen werden nur für anonyme oder noch unklassifizierte Kandidaten gelesen; eindeutig interne und personengebundene Freigaben erzeugen keine Einzelabfragen
 - eigener Bereich zur Lizenzoptimierung: freie Seats, deaktivierte oder 90 Tage inaktive Zuweisungen, gruppenbasierte Quellen, vorsichtige Downgrade-Kandidaten und Monats-/Jahrespotenziale
 - optionale lokale SKU-Preisliste (`sku;preisProMonat`) für kundenspezifische Monats- und Jahreswerte
 - konfigurierbarer Export als PDF, Markdown und echtes DOCX – einschließlich optionaler Empfehlungsübersicht und optionaler Service-Health-Daten

@@ -723,7 +723,7 @@ async function sharedFileInventory(drives, token, progress) {
     progress?.(`Dateien & Ordner: ${Math.min(itemsByDrive.size + unreadableDrives, drives.length)}/${drives.length} Speicherorte · ${[...itemsByDrive.values()].reduce((sum, items) => sum + items.length, 0)} Elemente`);
   }
   const screening = screenPublicShares(drives, itemsByDrive);
-  progress?.(`Öffentliche Freigaben: ${screening.screenedItems} Objekte gesichtet · ${screening.sharedRoots} Freigabe-Wurzeln · ${screening.candidates.length} anonyme Kandidaten${screening.unclassified ? ` · ${screening.unclassified} nicht klassifiziert` : ''}`);
+  progress?.(`Öffentliche Freigaben: ${screening.screenedItems} Objekte gesichtet · ${screening.sharedRoots} Freigabe-Wurzeln · ${screening.candidates.length} Kandidaten (${screening.unclassified} ohne Linktyp-Hinweis)`);
   const permissions = await graphBatch(screening.candidates.map(({ drive, item }) => ({
     key: `${drive.id}:${item.id}`,
     url: `/drives/${encodeURIComponent(drive.id)}/items/${encodeURIComponent(item.id)}/permissions?$select=id,roles,expirationDateTime,grantedToV2,grantedToIdentitiesV2,invitation,link`,

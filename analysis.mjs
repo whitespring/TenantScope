@@ -533,7 +533,7 @@ export function screenPublicShares(drives = [], itemsByDrive = new Map()) {
   const sharedItems = drives.flatMap((drive) => (itemsByDrive.get(drive.id) || [])
     .filter((item) => item.shared && !item.deleted)
     .map((item) => ({ drive, item })));
-  const candidates = sharedItems.filter(({ item }) => item.shared.scope === 'anonymous');
+  const candidates = sharedItems.filter(({ item }) => !item.shared.scope || item.shared.scope === 'anonymous');
   const candidateItemsByDrive = new Map(drives.map((drive) => [drive.id, []]));
   candidates.forEach(({ drive, item }) => candidateItemsByDrive.get(drive.id).push(item));
   return {
@@ -592,7 +592,6 @@ export function analyseSharing(drives = [], itemsByDrive = new Map(), permission
   if (throttled.length) findings.push(finding('error', `${throttled.length} Berechtigungsabfragen nach Wiederholung gedrosselt`, 'Microsoft Graph hat die Detailabfragen auch nach automatischer Wartezeit nicht verarbeitet.', 'Diesen Bereich später erneut prüfen; bereits gelesene Ergebnisse bleiben auswertbar.'));
   if (otherUnreadable.length) findings.push(finding('error', `${otherUnreadable.length} Freigaben mit technisch nicht lesbaren Berechtigungen`, `Microsoft Graph konnte die Berechtigungslisten nicht liefern${permissionFailures.size ? ` (${[...new Set(otherUnreadable.map((entry) => entry.permissionFailure?.code).filter(Boolean))].slice(0, 3).join(', ') || 'unbekannter Fehler'})` : ''}.`, 'Prüfstatus in der Detailtabelle kontrollieren und den Bereich erneut prüfen.'));
   if (unreadableDrives) findings.push(finding('error', `${unreadableDrives} Speicherorte nicht vollständig lesbar`, 'Mindestens eine Dokumentbibliothek oder ein OneDrive konnte nicht vollständig inventarisiert werden.', 'Sites.Read.All, Files.Read.All und den SharePoint-Zugriff des angemeldeten Kontos prüfen.'));
-  if (screening.unclassified) findings.push(finding('error', `${screening.unclassified} Freigabe-Wurzeln ohne eindeutigen Linktyp`, 'Der schnelle Graph-Hinweis konnte diese Freigaben nicht als öffentlich, organisationsweit oder personengebunden einordnen.', 'Für vollständige Gewissheit eine gezielte Tiefenprüfung der betroffenen Speicherorte oder Microsoft Data Access Governance verwenden.'));
   if (!findings.length) findings.push(finding('ok', 'Keine aktive öffentliche Freigabe erkannt', 'In den klassifizierbaren Freigabe-Wurzeln wurde kein aktuell nutzbarer „Jeder mit Link“-Zugriff bestätigt.', 'Tenant- und Site-Regeln sowie öffentliche Freigaben regelmäßig erneut prüfen.'));
 
   const visibleEntries = [...anonymous, ...unreadable].filter((entry, index, values) => values.indexOf(entry) === index);
@@ -600,7 +599,7 @@ export function analyseSharing(drives = [], itemsByDrive = new Map(), permission
 
   return {
     records: visibleEntries.length,
-    unavailable: unreadable.length + unreadableDrives + Number(Boolean(screening.unclassified)),
+    unavailable: unreadable.length + unreadableDrives,
     summary: `${anonymous.length} aktive öffentliche Freigaben aus ${sharedRoots} Freigabe-Wurzeln in ${drives.length} Speicherorten bestätigt`,
     metrics: [[String(sharedRoots), 'Freigabe-Wurzeln'], [String(anonymous.length), 'öffentlich bestätigt'], [String(writable.length), 'öffentlich schreibbar'], [String(withoutExpiry.length), 'öffentlich ohne Ablauf']],
     findings,
