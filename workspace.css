@@ -546,6 +546,7 @@ h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.0
     grid-template-columns: 1fr auto;
     grid-template-rows: 48px 48px;
     column-gap: 16px;
+    row-gap: 0;
   }
 
   .wordmark { font-size: 19px; }
