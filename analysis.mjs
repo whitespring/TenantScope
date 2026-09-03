@@ -528,7 +528,24 @@ function sharedIdentity(identitySet = {}) {
   return identity?.displayName || identity?.email || identity?.loginName || identity?.id;
 }
 
-export function analyseSharing(drives = [], itemsByDrive = new Map(), permissionsByItem = new Map(), now = new Date(), unreadableDrives = 0, permissionFailures = new Map()) {
+export function screenPublicShares(drives = [], itemsByDrive = new Map()) {
+  const screenedItems = [...itemsByDrive.values()].reduce((sum, items) => sum + items.length, 0);
+  const sharedItems = drives.flatMap((drive) => (itemsByDrive.get(drive.id) || [])
+    .filter((item) => item.shared && !item.deleted)
+    .map((item) => ({ drive, item })));
+  const candidates = sharedItems.filter(({ item }) => item.shared.scope === 'anonymous');
+  const candidateItemsByDrive = new Map(drives.map((drive) => [drive.id, []]));
+  candidates.forEach(({ drive, item }) => candidateItemsByDrive.get(drive.id).push(item));
+  return {
+    screenedItems,
+    sharedRoots: sharedItems.length,
+    unclassified: sharedItems.filter(({ item }) => !item.shared.scope).length,
+    candidates,
+    itemsByDrive: candidateItemsByDrive,
+  };
+}
+
+export function analyseSharing(drives = [], itemsByDrive = new Map(), permissionsByItem = new Map(), now = new Date(), unreadableDrives = 0, permissionFailures = new Map(), screening = {}) {
   const scopeLabel = { anonymous: 'Jeder mit Link', organization: 'Organisation', users: 'Bestimmte Personen' };
   const entries = drives.flatMap((drive) => (itemsByDrive.get(drive.id) || [])
     .filter((item) => item.shared && !item.deleted)
@@ -547,44 +564,51 @@ export function analyseSharing(drives = [], itemsByDrive = new Map(), permission
       const expirations = (permissions || []).map((permission) => permission.expirationDateTime).filter((value) => value && !value.startsWith('0001')).sort();
       const sharedDate = item.shared.sharedDateTime;
       const ageDays = sharedDate ? Math.max(0, Math.floor((now - new Date(sharedDate)) / day)) : null;
+      const anonymousPermissions = (permissions || []).filter((permission) => permission.link?.scope === 'anonymous');
+      const activeAnonymousPermissions = anonymousPermissions.filter((permission) => !permission.expirationDateTime || new Date(permission.expirationDateTime) > now);
       return {
-        drive, item, permissions, permissionFailure, ageDays,
-        scopes: scopes.length ? scopes : item.shared.scope ? [item.shared.scope] : [],
+        drive, item, permissions, permissionFailure, ageDays, anonymousPermissions, activeAnonymousPermissions,
+        scopes: permissions == null && item.shared.scope ? [item.shared.scope] : scopes,
         roles,
         recipients,
         expiration: expirations[0],
       };
     }))
     .sort((left, right) => (right.ageDays ?? -1) - (left.ageDays ?? -1));
-  const anonymous = entries.filter((entry) => entry.scopes.includes('anonymous'));
-  const writable = entries.filter((entry) => entry.roles.includes('write'));
-  const old = entries.filter((entry) => entry.ageDays >= 180);
+  const anonymous = entries.filter((entry) => entry.activeAnonymousPermissions.length);
+  const writable = anonymous.filter((entry) => entry.activeAnonymousPermissions.some((permission) => permission.roles?.includes('write')));
+  const withoutExpiry = anonymous.filter((entry) => entry.activeAnonymousPermissions.some((permission) => !permission.expirationDateTime || permission.expirationDateTime.startsWith('0001')));
+  const guarded = anonymous.filter((entry) => !writable.includes(entry) && !withoutExpiry.includes(entry));
   const unreadable = entries.filter((entry) => entry.permissions == null);
   const accessDenied = unreadable.filter((entry) => [401, 403].includes(entry.permissionFailure?.status));
   const throttled = unreadable.filter((entry) => [429, 503, 504].includes(entry.permissionFailure?.status));
   const otherUnreadable = unreadable.filter((entry) => ![401, 403, 429, 503, 504].includes(entry.permissionFailure?.status));
   const findings = [];
 
-  if (anonymous.length) findings.push(finding('high', `${anonymous.length} Dateien oder Ordner mit anonymem Link`, 'Diese Inhalte können ohne Anmeldung über einen weitergegebenen Link geöffnet werden.', 'Geschäftlichen Bedarf prüfen, anonyme Links löschen oder durch Freigaben für bestimmte Personen ersetzen.'));
-  if (writable.length) findings.push(finding('medium', `${writable.length} geteilte Inhalte mit Schreibrecht`, 'Mindestens eine aktuelle Freigabe erlaubt Änderungen am Inhalt.', 'Empfänger, Bearbeitungsbedarf und mögliche Nur-Lese-Alternativen prüfen.'));
-  if (old.length) findings.push(finding('medium', `${old.length} Freigaben seit mindestens 180 Tagen`, 'Lange bestehende Freigaben können ihren ursprünglichen Zweck überdauern.', 'Owner und fachlichen Bedarf rezertifizieren; nicht mehr benötigte Freigaben entfernen.'));
+  if (writable.length) findings.push(finding('high', `${writable.length} öffentliche Freigaben mit Schreibrecht`, 'Diese Inhalte können ohne Anmeldung verändert werden.', 'Öffentliche Schreiblinks entfernen oder durch personengebundene Freigaben mit minimalen Rechten ersetzen.'));
+  if (withoutExpiry.length) findings.push(finding('high', `${withoutExpiry.length} öffentliche Freigaben ohne Ablaufdatum`, 'Diese Links bleiben ohne Anmeldung nutzbar, bis sie ausdrücklich entfernt werden.', 'Kurzes Ablaufdatum setzen oder den Link durch eine Freigabe für bestimmte Personen ersetzen.'));
+  if (guarded.length) findings.push(finding('medium', `${guarded.length} öffentliche Freigaben mit Ablauf und ohne erkanntes Schreibrecht`, 'Auch zeitlich begrenzte Leselinks können von jeder Person verwendet werden, die den Link erhält.', 'Geschäftlichen Bedarf und Laufzeit prüfen; für sensible Inhalte „Bestimmte Personen“ verwenden.'));
   if (accessDenied.length) findings.push(finding('error', `${accessDenied.length} Freigaben: Zugriff auf Berechtigungen verweigert`, 'Microsoft Graph hat diese Berechtigungslisten mit HTTP 401 oder 403 abgelehnt.', 'Admin-Consent für Files.Read.All beziehungsweise Sites.Read.All und den Zugriff des angemeldeten Kontos auf die Speicherorte prüfen.'));
   if (throttled.length) findings.push(finding('error', `${throttled.length} Berechtigungsabfragen nach Wiederholung gedrosselt`, 'Microsoft Graph hat die Detailabfragen auch nach automatischer Wartezeit nicht verarbeitet.', 'Diesen Bereich später erneut prüfen; bereits gelesene Ergebnisse bleiben auswertbar.'));
   if (otherUnreadable.length) findings.push(finding('error', `${otherUnreadable.length} Freigaben mit technisch nicht lesbaren Berechtigungen`, `Microsoft Graph konnte die Berechtigungslisten nicht liefern${permissionFailures.size ? ` (${[...new Set(otherUnreadable.map((entry) => entry.permissionFailure?.code).filter(Boolean))].slice(0, 3).join(', ') || 'unbekannter Fehler'})` : ''}.`, 'Prüfstatus in der Detailtabelle kontrollieren und den Bereich erneut prüfen.'));
   if (unreadableDrives) findings.push(finding('error', `${unreadableDrives} Speicherorte nicht vollständig lesbar`, 'Mindestens eine Dokumentbibliothek oder ein OneDrive konnte nicht vollständig inventarisiert werden.', 'Sites.Read.All, Files.Read.All und den SharePoint-Zugriff des angemeldeten Kontos prüfen.'));
-  if (!findings.length) findings.push(finding('ok', 'Keine riskante Dateifreigabe erkannt', entries.length ? 'Die gefundenen Freigaben sind jünger als 180 Tage, nicht anonym und ohne erkanntes Schreibrecht.' : 'In den auswertbaren Speicherorten wurden keine geteilten Dateien oder Ordner gefunden.', 'Freigabebestand regelmäßig erneut prüfen.'));
+  if (screening.unclassified) findings.push(finding('error', `${screening.unclassified} Freigabe-Wurzeln ohne eindeutigen Linktyp`, 'Der schnelle Graph-Hinweis konnte diese Freigaben nicht als öffentlich, organisationsweit oder personengebunden einordnen.', 'Für vollständige Gewissheit eine gezielte Tiefenprüfung der betroffenen Speicherorte oder Microsoft Data Access Governance verwenden.'));
+  if (!findings.length) findings.push(finding('ok', 'Keine aktive öffentliche Freigabe erkannt', 'In den klassifizierbaren Freigabe-Wurzeln wurde kein aktuell nutzbarer „Jeder mit Link“-Zugriff bestätigt.', 'Tenant- und Site-Regeln sowie öffentliche Freigaben regelmäßig erneut prüfen.'));
+
+  const visibleEntries = [...anonymous, ...unreadable].filter((entry, index, values) => values.indexOf(entry) === index);
+  const sharedRoots = Number.isFinite(screening.sharedRoots) ? screening.sharedRoots : entries.length;
 
   return {
-    records: entries.length,
-    unavailable: unreadable.length + unreadableDrives,
-    summary: `${entries.length} geteilte Dateien und Ordner in ${drives.length} Speicherorten geprüft`,
-    metrics: [[String(entries.length), 'Freigaben'], [String(anonymous.length), 'anonym'], [String(writable.length), 'mit Schreibrecht'], [String(old.length), 'mindestens 180 Tage alt']],
+    records: visibleEntries.length,
+    unavailable: unreadable.length + unreadableDrives + Number(Boolean(screening.unclassified)),
+    summary: `${anonymous.length} aktive öffentliche Freigaben aus ${sharedRoots} Freigabe-Wurzeln in ${drives.length} Speicherorten bestätigt`,
+    metrics: [[String(sharedRoots), 'Freigabe-Wurzeln'], [String(anonymous.length), 'öffentlich bestätigt'], [String(writable.length), 'öffentlich schreibbar'], [String(withoutExpiry.length), 'öffentlich ohne Ablauf']],
     findings,
     details: {
-      title: 'Geteilte Ordner und Dateien',
+      title: 'Öffentliche Freigaben und ungeklärte Kandidaten',
       ageColumn: 6,
-      columns: ['Objekt', 'Typ', 'Speicherort', 'Eigentümer', 'Geteilt von', 'Geteilt seit', 'Alter (Tage)', 'Freigabeart', 'Prüfstatus', 'Rechte', 'Empfänger', 'Ablauf', 'Öffnen'],
-      rows: entries.map(({ drive, item, permissions, permissionFailure, ageDays, scopes, roles, recipients, expiration }) => [
+      columns: ['Objekt', 'Typ', 'Speicherort', 'Eigentümer', 'Geteilt von', 'Geteilt seit', 'Alter (Tage)', 'Freigabeart', 'Prüfstatus', 'Rechte', 'Empfänger', 'Ablauf', 'Absicherung', 'Öffnen'],
+      rows: visibleEntries.map(({ drive, item, permissions, permissionFailure, ageDays, scopes, roles, recipients, expiration, activeAnonymousPermissions }) => [
         item.name || item.id,
         item.folder ? 'Ordner' : item.file ? 'Datei' : 'Objekt',
         drive.sourceName || drive.name || drive.id,
@@ -597,6 +621,7 @@ export function analyseSharing(drives = [], itemsByDrive = new Map(), permission
         roles.join(', ') || '–',
         recipients.join(', ') || '–',
         date(expiration),
+        permissions == null ? 'Nicht bestätigt' : `Ohne Anmeldung · ${activeAnonymousPermissions.some((permission) => permission.roles?.includes('write')) ? 'Schreibrecht' : 'Nur Lesen'} · ${activeAnonymousPermissions.some((permission) => !permission.expirationDateTime || permission.expirationDateTime.startsWith('0001')) ? 'kein Ablauf' : 'mit Ablauf'}`,
         item.webUrl || '–',
       ]),
     },

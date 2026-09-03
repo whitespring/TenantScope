@@ -20,6 +20,7 @@ import {
   fitMetricFontSize,
   graphUrl,
   parsePriceCsv,
+  screenPublicShares,
   sortFindingsBySeverity,
   trustedMicrosoftUrl,
 } from './analysis.mjs';
@@ -131,15 +132,44 @@ const sites = analyseSites(
 );
 assert.equal(sites.findings[0].severity, 'high');
 
+const publicShareScreening = screenPublicShares(
+  [{ id: 'd1' }],
+  new Map([['d1', [
+    { id: 'public', shared: { scope: 'anonymous' } },
+    { id: 'internal', shared: { scope: 'organization' } },
+    { id: 'unknown', shared: {} },
+    { id: 'deleted', shared: { scope: 'anonymous' }, deleted: {} },
+  ]]]),
+);
+assert.deepEqual([publicShareScreening.screenedItems, publicShareScreening.sharedRoots, publicShareScreening.unclassified, publicShareScreening.candidates.length], [4, 3, 1, 1]);
+assert.deepEqual(publicShareScreening.itemsByDrive.get('d1').map(({ id }) => id), ['public']);
+
 const sharing = analyseSharing(
   [{ id: 'd1', name: 'Dokumente', owner: { user: { displayName: 'Ada' } } }],
   new Map([['d1', [{ id: 'i1', name: 'Projekt', folder: {}, webUrl: 'https://example.sharepoint.com/projekt', shared: { sharedDateTime: '2026-01-01T00:00:00Z', sharedBy: { user: { displayName: 'Grace' } } } }]]]),
   new Map([['d1:i1', [{ roles: ['write'], link: { scope: 'anonymous' }, expirationDateTime: '2026-12-31T00:00:00Z' }]]]),
   new Date('2026-09-03T00:00:00Z'),
 );
-assert.deepEqual(sharing.metrics.map(([value]) => value), ['1', '1', '1', '1']);
+assert.deepEqual(sharing.metrics.map(([value]) => value), ['1', '1', '1', '0']);
 assert.deepEqual(sharing.details.rows[0].slice(0, 6), ['Projekt', 'Ordner', 'Dokumente', 'Ada', 'Grace', '1.1.2026']);
 assert.equal(sharing.details.ageColumn, 6);
+assert.match(sharing.findings[0].title, /Schreibrecht/);
+
+const unprotectedSharing = analyseSharing(
+  [{ id: 'd1', name: 'Dokumente' }],
+  new Map([['d1', [{ id: 'i1', name: 'Öffentlich', file: {}, shared: { scope: 'anonymous' } }]]]),
+  new Map([['d1:i1', [{ roles: ['read'], link: { scope: 'anonymous' } }]]]),
+);
+assert.equal(unprotectedSharing.metrics[3][0], '1');
+assert.match(unprotectedSharing.findings[0].title, /ohne Ablaufdatum/);
+
+const authenticatedSharing = analyseSharing(
+  [{ id: 'd1', name: 'Dokumente' }],
+  new Map([['d1', [{ id: 'i1', name: 'Intern', file: {}, shared: { scope: 'organization' } }]]]),
+  new Map([['d1:i1', [{ roles: ['write'], link: { scope: 'organization' } }]]]),
+);
+assert.equal(authenticatedSharing.metrics[1][0], '0');
+assert.equal(authenticatedSharing.findings[0].severity, 'ok');
 
 const throttledSharing = analyseSharing(
   [{ id: 'd1', name: 'Dokumente' }],

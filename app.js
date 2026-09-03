@@ -20,6 +20,7 @@ import {
   fitMetricFontSize,
   graphUrl,
   parsePriceCsv,
+  screenPublicShares,
   sortFindingsBySeverity,
   trustedMicrosoftUrl,
 } from './analysis.mjs';
@@ -82,8 +83,8 @@ const scopes = [
     permissions: ['Sites.Read.All', 'Reports.Read.All', 'SharePointTenantSettings.Read.All'],
   },
   {
-    id: 'sharing', name: 'Dateien & Freigaben', tag: 'SharePoint & OneDrive',
-    description: 'Geteilte Dateien und Ordner, Alter, Empfänger, Linktyp und Rechte',
+    id: 'sharing', name: 'Öffentliche Freigaben', tag: 'SharePoint & OneDrive',
+    description: 'Anonyme Links, Schreibrechte, Ablauf und schwache Absicherung',
     permissions: ['Sites.Read.All', 'Files.Read.All', 'User.Read.All'],
   },
   {
@@ -169,8 +170,8 @@ const scopeGuidance = {
     adminLinks: [['Aktive Sites verwalten', 'https://admin.microsoft.com/sharepoint?page=siteManagement&modern=true']],
   },
   sharing: {
-    explanation: 'Diese Tiefenprüfung inventarisiert geteilte Dateien und Ordner in erreichbaren SharePoint- und OneDrive-Speicherorten. „Geteilt seit“ stammt aus dem Graph-Feld sharedDateTime; Linktyp und Empfänger werden aus den aktuellen Berechtigungen bestimmt.',
-    goodPractice: 'Standardmäßig „Bestimmte Personen“ und Nur-Lese-Zugriff mit Ablaufdatum verwenden. Anonyme oder beschreibbare Links auf begründete Ausnahmen beschränken und alte Freigaben regelmäßig durch Owner rezertifizieren.',
+    explanation: 'Die Prüfung sucht gezielt nach „Jeder mit Link“-Freigaben in erreichbaren SharePoint- und OneDrive-Speicherorten. Microsoft Graph liefert für Geschäftskonten keinen belastbaren Passwortindikator; ein anonymer Link gilt deshalb als Zugriff ohne Anmeldung. Interne und personengebundene Freigaben werden nicht einzeln abgefragt.',
+    goodPractice: 'Standardmäßig „Bestimmte Personen“ verwenden. Öffentliche Links auf begründete Ausnahmen beschränken, nur lesend und mit kurzem Ablaufdatum vergeben sowie regelmäßig durch Owner rezertifizieren. Öffentliche Schreiblinks oder Links ohne Ablauf zeitnah ersetzen.',
     helpUrl: 'https://learn.microsoft.com/en-us/graph/api/driveitem-list-permissions?view=graph-rest-1.0',
     adminLinks: [['SharePoint-Sites verwalten', 'https://admin.microsoft.com/sharepoint?page=siteManagement&modern=true'], ['OneDrive-Freigabeeinstellungen', 'https://admin.microsoft.com/sharepoint?page=sharing&modern=true']],
   },
@@ -534,11 +535,11 @@ async function graphRequest(path, token, options = {}) {
   throw new GraphError(503, 'serviceUnavailable', 'Microsoft Graph ist vorübergehend nicht erreichbar.');
 }
 
-async function graphCollection(path, token, limit = Infinity) {
+async function graphCollection(path, token, limit = Infinity, options = {}) {
   const values = [];
   let next = path;
   while (next && values.length < limit) {
-    const page = await graphRequest(next, token);
+    const page = await graphRequest(next, token, options);
     values.push(...(page.value || []));
     next = page['@odata.nextLink'];
   }
@@ -708,7 +709,12 @@ async function sharedFileInventory(drives, token, progress) {
   const groups = chunks(drives, 4);
   for (const [groupIndex, group] of groups.entries()) {
     progress?.(`Dateien & Ordner: Speicherorte ${groupIndex * 4 + 1}–${Math.min((groupIndex + 1) * 4, drives.length)} von ${drives.length}`);
-    const settled = await Promise.allSettled(group.map((drive) => graphCollection(`/drives/${encodeURIComponent(drive.id)}/root/delta?$select=id,name,webUrl,parentReference,file,folder,size,createdDateTime,lastModifiedDateTime,shared,deleted`, token)));
+    const settled = await Promise.allSettled(group.map((drive) => graphCollection(
+      `/drives/${encodeURIComponent(drive.id)}/root/delta?$select=id,name,webUrl,parentReference,file,folder,size,createdDateTime,lastModifiedDateTime,shared,deleted`,
+      token,
+      Infinity,
+      { headers: { Prefer: 'hierarchicalsharing' } },
+    )));
     settled.forEach((result, index) => {
       const drive = group[index];
       if (result.status === 'fulfilled') itemsByDrive.set(drive.id, result.value);
@@ -716,12 +722,19 @@ async function sharedFileInventory(drives, token, progress) {
     });
     progress?.(`Dateien & Ordner: ${Math.min(itemsByDrive.size + unreadableDrives, drives.length)}/${drives.length} Speicherorte · ${[...itemsByDrive.values()].reduce((sum, items) => sum + items.length, 0)} Elemente`);
   }
-  const sharedItems = drives.flatMap((drive) => (itemsByDrive.get(drive.id) || []).filter((item) => item.shared && !item.deleted).map((item) => ({ drive, item })));
-  const permissions = await graphBatch(sharedItems.map(({ drive, item }) => ({
+  const screening = screenPublicShares(drives, itemsByDrive);
+  progress?.(`Öffentliche Freigaben: ${screening.screenedItems} Objekte gesichtet · ${screening.sharedRoots} Freigabe-Wurzeln · ${screening.candidates.length} anonyme Kandidaten${screening.unclassified ? ` · ${screening.unclassified} nicht klassifiziert` : ''}`);
+  const permissions = await graphBatch(screening.candidates.map(({ drive, item }) => ({
     key: `${drive.id}:${item.id}`,
-    url: `/drives/${encodeURIComponent(drive.id)}/items/${encodeURIComponent(item.id)}/permissions?$select=id,roles,expirationDateTime,hasPassword,grantedToV2,grantedToIdentitiesV2,invitation,link`,
-  })), token, progress, 'Freigabeberechtigungen');
-  return { itemsByDrive, permissions, permissionFailures: permissions.failures, unreadableDrives };
+    url: `/drives/${encodeURIComponent(drive.id)}/items/${encodeURIComponent(item.id)}/permissions?$select=id,roles,expirationDateTime,grantedToV2,grantedToIdentitiesV2,invitation,link`,
+  })), token, progress, 'Öffentliche Links verifizieren');
+  return {
+    itemsByDrive: screening.itemsByDrive,
+    permissions,
+    permissionFailures: permissions.failures,
+    unreadableDrives,
+    screening,
+  };
 }
 
 async function appRoleInventory(servicePrincipals, token, progress) {
@@ -887,8 +900,8 @@ const inventoryRunners = {
       users: { label: 'OneDrive-Besitzer', path: '/users?$select=id,displayName,userPrincipalName,accountEnabled,userType&$top=999' },
     }, progress);
     const drives = await tenantDriveInventory(data.sites, data.users.filter((user) => user.accountEnabled && user.userType !== 'Guest'), token, progress);
-    const { itemsByDrive, permissions, permissionFailures, unreadableDrives } = await sharedFileInventory(drives, token, progress);
-    return analyseSharing(drives, itemsByDrive, permissions, undefined, unreadableDrives, permissionFailures);
+    const { itemsByDrive, permissions, permissionFailures, unreadableDrives, screening } = await sharedFileInventory(drives, token, progress);
+    return analyseSharing(drives, itemsByDrive, permissions, undefined, unreadableDrives, permissionFailures, screening);
   },
   async devices(token, progress) {
     const data = await requiredDatasets(token, { devices: { label: 'Entra-Geräte', path: '/devices?$select=id,deviceId,displayName,operatingSystem,operatingSystemVersion,accountEnabled,approximateLastSignInDateTime,trustType,isCompliant,isManaged&$top=999' } }, progress);

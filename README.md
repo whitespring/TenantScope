@@ -19,7 +19,8 @@ Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter
 - linke Navigation für Setup, Prüfumfang, Übersicht und einzelne Ergebnisbereiche
 - klickbare Kennzahlen als Detailfilter sowie durchsuchbare, sortierbare Tabellen mit 10er-Pagination
 - nach Schwere priorisierte Live-Befunde, Good-Practice-Hinweise und Detailtabellen der betroffenen Objekte
-- 15 getrennt auswählbare Bereiche: Tenant, Benutzer, Rollen, Conditional Access, Lizenzen/Kosten, Nutzung, Speicher, Teams/Gruppen, SharePoint, Dateien/Freigaben, Entra-Geräte, Apps, Secure Score, Purview und Service Health
+- 15 getrennt auswählbare Bereiche: Tenant, Benutzer, Rollen, Conditional Access, Lizenzen/Kosten, Nutzung, Speicher, Teams/Gruppen, SharePoint, öffentliche Freigaben, Entra-Geräte, Apps, Secure Score, Purview und Service Health
+- skalierbares Freigabe-Screening: Delta liefert Freigabe-Wurzeln, Detailberechtigungen werden nur für anonyme Link-Kandidaten gelesen; interne und personengebundene Freigaben erzeugen keine Einzelabfragen
 - eigener Bereich zur Lizenzoptimierung: freie Seats, deaktivierte oder 90 Tage inaktive Zuweisungen, gruppenbasierte Quellen, vorsichtige Downgrade-Kandidaten und Monats-/Jahrespotenziale
 - optionale lokale SKU-Preisliste (`sku;preisProMonat`) für kundenspezifische Monats- und Jahreswerte
 - konfigurierbarer Export als PDF, Markdown und echtes DOCX – einschließlich optionaler Empfehlungsübersicht und optionaler Service-Health-Daten
@@ -46,7 +47,7 @@ Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter
 | Nutzung/Speicher | `Reports.Read.All`, `ReportSettings.Read.All`, `User.Read.All` |
 | Teams & Gruppen | `Group.Read.All` |
 | SharePoint | `Sites.Read.All`, `Reports.Read.All`, `SharePointTenantSettings.Read.All` |
-| Dateien & Freigaben | `Sites.Read.All`, `Files.Read.All`, `User.Read.All` |
+| Öffentliche Freigaben | `Sites.Read.All`, `Files.Read.All`, `User.Read.All` |
 | Entra-Geräte | `Device.Read.All` |
 | Apps & OAuth | `Application.Read.All`, `Directory.Read.All` |
 | Microsoft Secure Score | `SecurityEvents.Read.All` |
