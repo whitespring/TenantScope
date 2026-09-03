@@ -257,7 +257,7 @@ h2,
 .section-heading .eyebrow,
 .report-toolbar .eyebrow,
 .area-heading .eyebrow { display: none; }
-h2 { font-size: clamp(42px, 4vw, 60px); line-height: .98; letter-spacing: -.005em; font-weight: 700; }
+h2 { font-size: clamp(40px, 3.75vw, 56px); line-height: .98; letter-spacing: -.005em; font-weight: 700; }
 .section-intro { max-width: 780px; margin: 31px 0 0; color: #59636e; font-size: 20px; line-height: 1.45; }
 .save-status { display: block; margin-top: 31px; color: #656b72; font-size: 20px; }
 .save-status.saved { color: #656b72; }
@@ -416,7 +416,7 @@ h2 { font-size: clamp(42px, 4vw, 60px); line-height: .98; letter-spacing: -.005e
 
 .report { padding: 0; border: 0; }
 .report-toolbar { margin-bottom: 42px; }
-.report-toolbar h2 { font-size: clamp(38px, 4vw, 58px); }
+.report-toolbar h2 { font-size: clamp(36px, 3.75vw, 54px); }
 .area-heading { padding-bottom: 26px; }
 .area-heading h3 { font-size: clamp(28px, 3vw, 42px); font-weight: 700; }
 .area-heading > p,
@@ -559,7 +559,7 @@ h2 { font-size: clamp(42px, 4vw, 60px); line-height: .98; letter-spacing: -.005e
   .section-block { min-height: calc(100vh - 124px); padding: 46px 24px 64px; }
   .section-heading,
   #setup .section-heading { display: block; margin-bottom: 38px; }
-  h2 { font-size: clamp(38px, 11vw, 52px); overflow-wrap: anywhere; }
+  h2 { font-size: clamp(36px, 10vw, 48px); overflow-wrap: anywhere; }
   .section-intro { margin-top: 22px; font-size: 15px; line-height: 1.55; }
   .save-status { display: block; margin: 22px 0 0; white-space: normal; }
   .setup-layout { width: 100%; }

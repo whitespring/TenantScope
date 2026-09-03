@@ -15,7 +15,7 @@ colors:
 typography:
   display:
     fontFamily: "Exo 2, ui-sans-serif, sans-serif"
-    fontSize: "clamp(42px, 4vw, 60px)"
+    fontSize: "clamp(40px, 3.75vw, 56px)"
     fontWeight: 700
     lineHeight: 0.98
     letterSpacing: "-0.005em"
@@ -85,8 +85,9 @@ Die Palette ist überwiegend neutral; die beiden Markenakzente werden sparsam un
 
 ### Hierarchy
 
-- **Display** (700, `clamp(42px, 4vw, 60px)`, 0.98): Seitentitel und zentrale Arbeitszustände.
-- **Title** (700, 28–42px): Bereichs- und Berichtstitel.
+- **Display** (700, `clamp(40px, 3.75vw, 56px)`, 0.98): Seitentitel und zentrale Arbeitszustände.
+- **Title** (700, 36–54px): Bereichs- und Berichtstitel.
+- **Section** (500, 22px): Untergliederung innerhalb eines Berichtsbereichs.
 - **Body** (400, 16px, 1.55): Erläuterungen, Hilfen und längere Befunde.
 - **Label** (700, 14–18px): Felder, Navigation und kompakte Aktionen.
 

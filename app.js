@@ -1354,7 +1354,7 @@ function renderReport(report) {
       <span>Erstellt: <strong>${escapeHtml(createdAt)}</strong></span>
     </div>
     <div class="score-row" data-export-section="summary">
-      <article class="score-card primary"><small>POC Governance-Indikator</small><strong>${score == null ? '–' : `${score}/100`}</strong><p>${scoreLabel}</p></article>
+      <article class="score-card primary"><small>Governance-Indikator</small><strong>${score == null ? '–' : `${score}/100`}</strong><p>${scoreLabel}</p></article>
       <article class="score-card"><small>Hohes Risiko</small><strong>${totals.high}</strong><p>zeitnah bearbeiten</p></article>
       <article class="score-card"><small>Mittleres Risiko</small><strong>${totals.medium}</strong><p>einplanen</p></article>
       <article class="score-card"><small>Ungeprüfte Abfragen</small><strong>${failed}</strong><p>Rolle, Consent oder Lizenz prüfen</p></article>
@@ -1449,9 +1449,9 @@ function markdownGuidanceLinks(scopeId) {
 
 function reportMarkdown(report, options) {
   const sections = [
-    `# M365 Governance-Inventur – ${escapeMarkdown(report.tenant.name)}\n\n> Live-Auswertung aus Microsoft Graph v1.0; Speicherberichte über die Graph Reports API beta. Der POC-Indikator ist nicht der Microsoft Secure Score.\n\n- **Tenant-ID:** ${escapeMarkdown(report.tenant.id)}\n- **Domain:** ${escapeMarkdown(report.tenant.domain)}\n- **Angemeldet:** ${escapeMarkdown(report.account)}\n- **Erstellt:** ${escapeMarkdown(report.createdAt)}`,
+    `# M365 Governance-Inventur – ${escapeMarkdown(report.tenant.name)}\n\n> Live-Auswertung aus Microsoft Graph v1.0; Speicherberichte über die Graph Reports API beta. Der Governance-Indikator ist nicht der Microsoft Secure Score.\n\n- **Tenant-ID:** ${escapeMarkdown(report.tenant.id)}\n- **Domain:** ${escapeMarkdown(report.tenant.domain)}\n- **Angemeldet:** ${escapeMarkdown(report.account)}\n- **Erstellt:** ${escapeMarkdown(report.createdAt)}`,
   ];
-  if (options.summary) sections.push(`## Zusammenfassung\n\n- **POC Governance-Indikator:** ${report.score == null ? 'nicht berechenbar' : `${report.score}/100`}\n- **Risiken:** ${report.totals.high} hoch, ${report.totals.medium} mittel\n- **Ungeprüfte Abfragen:** ${report.failed}`);
+  if (options.summary) sections.push(`## Zusammenfassung\n\n- **Governance-Indikator:** ${report.score == null ? 'nicht berechenbar' : `${report.score}/100`}\n- **Risiken:** ${report.totals.high} hoch, ${report.totals.medium} mittel\n- **Ungeprüfte Abfragen:** ${report.failed}`);
   if (options.recommendations) sections.push(`## Empfehlungsübersicht\n\n${recommendationGroups(report.findings).map((group) => `### ${escapeMarkdown(group.scope)}\n\n${group.items.map((item) => `- **${severityLabel(item.severity)} – ${escapeMarkdown(item.title)}:** ${escapeMarkdown(item.action)}`).join('\n')}\n\n${markdownGuidanceLinks(group.scopeId)}`).join('\n\n') || 'Keine priorisierten Empfehlungen.'}`);
   if (options.findings) sections.push(`## Priorisierte Befunde\n\n${report.findings.map((item) => {
     const guidance = scopeGuidance[item.scopeId];
@@ -1496,7 +1496,7 @@ function docxDetailBlocks(result, details) {
 function reportDocxBlocks(report, options) {
   const blocks = [
     { type: 'meta', rows: [['Organisation', report.tenant.name], ['Tenant-ID', report.tenant.id], ['Domain', report.tenant.domain], ['Angemeldet', report.account], ['Erstellt', report.createdAt]] },
-    { type: 'callout', label: 'DATENQUELLE', text: 'Live-Auswertung aus Microsoft Graph v1.0; ausgewiesene Nutzungs- und Speicherberichte verwenden zusätzlich Graph beta. Der POC-Indikator ist nicht der Microsoft Secure Score.' },
+    { type: 'callout', label: 'DATENQUELLE', text: 'Live-Auswertung aus Microsoft Graph v1.0; ausgewiesene Nutzungs- und Speicherberichte verwenden zusätzlich Graph beta. Der Governance-Indikator ist nicht der Microsoft Secure Score.' },
   ];
   if (options.summary) blocks.push(
     { text: 'Zusammenfassung', style: 'Heading1' },
