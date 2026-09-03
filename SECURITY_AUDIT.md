@@ -47,6 +47,7 @@ Nicht enthalten sind ein externer Penetrationstest, Microsoft-Tenant-Konfigurati
 - Dynamische HTML- und Markdown-Inhalte werden escaped; DOCX-Hyperlinks akzeptieren nur vertrauenswürdige Microsoft-HTTPS-Ziele.
 - Report-Downloads haben 120–135 Sekunden Timeout, 20 MB Nutzdatenlimit, 64 KB Fehlerlimit und 16 KB Headerlimit.
 - Fehlerprotokolle enthalten ausschließlich Reportkennung und bereinigten Fehlercode, keine Tokens, Ziel-URLs oder Dateninhalte.
+- Proxy-Request-/Response-Buffering und temporäre Proxydateien sind für Reportdaten deaktiviert.
 - MSAL Browser ist exakt auf `5.21.0` festgelegt; `npm audit --omit=dev` meldete 0 bekannte Schwachstellen.
 
 ### Origin und LXC

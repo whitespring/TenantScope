@@ -23,6 +23,8 @@ assert.match(nginx, /X-Content-Type-Options "nosniff"/, 'responses must disable 
 assert.match(nginx, /location ~ \^\/api\/reports\/\(m365-apps\|copilot\)\$/, 'only known report routes may reach the proxy');
 assert.match(nginx, /limit_req zone=tenantscope_reports/, 'report collection must be rate limited');
 assert.match(nginx, /limit_conn tenantscope_global 2/, 'report collection must have a global concurrency limit');
+assert.match(nginx, /proxy_buffering off/, 'report payloads must not be buffered to disk');
+assert.match(nginx, /proxy_max_temp_file_size 0/, 'report payloads must not create temporary files');
 assert.match(nginx, /listen 443 ssl/, 'the origin must support encrypted proxy traffic');
 assert.match(nginx, /location = \/ \{[\s\S]*try_files \/index\.html =404;/, 'the public webroot must use an allowlist');
 assert.doesNotMatch(nginx, /Access-Control-Allow-Origin/, 'the private same-origin API must not enable CORS');

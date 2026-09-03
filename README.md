@@ -80,7 +80,24 @@ Der vollständige Stand, die Prüfnachweise und die offenen Betriebsmaßnahmen s
 ## Vor öffentlicher Freigabe in Nginx Proxy Manager
 
 1. Forward Scheme auf `https`, Forward Host auf `__ORIGIN_IP__` und Forward Port auf `443` setzen.
-2. Sicherstellen, dass NPM `X-Real-IP` selbst auf die tatsächliche Client-IP setzt und eingehende gleichnamige Header nicht durchreicht. Das schützt die personenbezogenen Rate-Limits vor Spoofing.
+2. Folgenden Block unter **Advanced → Custom Nginx Configuration** einsetzen. Keine eigene `location /` definieren; sonst werden NPM-Access-List und „Block Common Exploits“ leicht umgangen.
+
+   ```nginx
+   proxy_ssl_protocols TLSv1.2 TLSv1.3;
+   proxy_ssl_server_name on;
+   proxy_ssl_name tenantscope;
+
+   proxy_connect_timeout 5s;
+   proxy_send_timeout 10s;
+   proxy_read_timeout 130s;
+
+   client_max_body_size 1k;
+   proxy_request_buffering off;
+   proxy_buffering off;
+   proxy_max_temp_file_size 0;
+   ```
+
+   NPM setzt `Host`, `X-Forwarded-For`, `X-Real-IP` und `X-Forwarded-Proto` in seiner Standard-Location bereits selbst; diese Header hier nicht doppelt konfigurieren.
 3. HSTS entweder auf `max-age=63072000; includeSubDomains; preload` korrigieren, wenn **alle** Subdomains dauerhaft HTTPS nutzen, oder `preload` entfernen.
 4. Erst nach erfolgreichem OAuth-, Inventur- und Exporttest die NPM-Access-List von „homelab only“ auf den gewünschten öffentlichen Zugriff umstellen.
 5. Danach Port 80 am Origin aus Nginx und nftables entfernen. Bis dahin bleibt er ausschließlich für `__REVERSE_PROXY_IP__` erreichbar.
