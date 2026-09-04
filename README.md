@@ -1,4 +1,4 @@
-# m365-governance-platform
+# TenantScope
 
 Lokaler POC für eine echte Microsoft-365-Governance-Inventur über Microsoft Graph.
 
