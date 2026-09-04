@@ -1,6 +1,6 @@
 # TenantScope Security Audit
 
-Stand: 3. September 2026
+Stand: 4. September 2026
 Zielsystem: `https://tenantscope.wspg.org`
 Ergebnis: **bedingt für eine öffentliche Preview freigabefähig**
 
@@ -17,14 +17,14 @@ Nicht enthalten sind ein externer Penetrationstest, Microsoft-Tenant-Konfigurati
 1. Der Browser speichert Tenant-ID, Client-ID und MSAL-Token nur im Sitzungsspeicher.
 2. OAuth verwendet Authorization Code mit PKCE gegen den konkret eingegebenen Tenant.
 3. Normale Inventurabfragen gehen direkt vom Browser an `graph.microsoft.com`.
-4. Nur die zwei fest definierten Report-Endpunkte `m365-apps` und `copilot` gehen über NPM → Origin-Nginx → loopbackgebundenen Python-Proxy → Microsoft Graph beziehungsweise validierte `reports*.office.com/data/`-Ziele.
+4. Nur die fünf fest definierten Report-Endpunkte `m365-apps`, `copilot`, `sharepoint-activity`, `onedrive-activity` und `viva-engage` gehen über NPM → Origin-Nginx → loopbackgebundenen Python-Proxy → Microsoft Graph beziehungsweise validierte `reports*.office.com/data/`-Ziele.
 5. Berichtsexporte entstehen im Browser. Der Server besitzt keine Tenant-Datenbank und legt keine Reports oder Tokens ab.
 
 ## Befunde
 
 | Schwere | Status | Befund und Maßnahme |
 |---|---|---|
-| Hoch | **Offen vor Public Launch** | NPM leitet aktuell per HTTP an Port 80 des Origins weiter. Damit können Bearer-Token der zwei Download-Reports im internen Segment unverschlüsselt übertragen werden. Origin-TLS ist auf Port 443 vorbereitet; NPM muss auf HTTPS und Port 443 des internen Origin-Hosts umgestellt werden. Anschließend Port 80 entfernen. |
+| Hoch | **Offen vor Public Launch** | NPM leitet aktuell per HTTP an Port 80 des Origins weiter. Damit können Bearer-Token der ausgewählten Download-Reports im internen Segment unverschlüsselt übertragen werden. Origin-TLS ist auf Port 443 vorbereitet; NPM muss auf HTTPS und Port 443 des internen Origin-Hosts umgestellt werden. Anschließend Port 80 entfernen. |
 | Hoch | Behoben | Der ursprüngliche Python-Server konnte als Static-File-Server laufen. Produktion nutzt jetzt ausschließlich `BaseHTTPRequestHandler`; statische Auslieferung ist nur im expliziten lokalen Entwicklungsmodus aktiv. |
 | Hoch | Behoben | Graph-Folge-URLs und Report-Redirects hätten als Token-/SSRF-Grenze missbraucht werden können. Graph-Ziele sind exakt auf HTTPS `graph.microsoft.com` begrenzt; Download-Redirects ausschließlich auf HTTPS `reports*.office.com`, Port 443 und `/data/`. Authorization wird nicht an das Download-Ziel weitergegeben. |
 | Hoch | Behoben | Origin und SSH waren im LAN erreichbar. Eine bootfeste nftables-Policy akzeptiert neue HTTP-/HTTPS-Verbindungen nur vom konfigurierten Reverse-Proxy-Host; SSH und Postfix sind deaktiviert und maskiert. Direkte Verbindungsversuche laufen in einen Timeout. |
@@ -33,7 +33,7 @@ Nicht enthalten sind ein externer Penetrationstest, Microsoft-Tenant-Konfigurati
 | Mittel | Offen | Der Proxmox-Host hat ausstehende Sicherheits- und Plattformupdates. Diese betreffen den gemeinsam genutzten Host und müssen in einem eigenen Wartungsfenster mit Cluster-/VM-Folgenabschätzung installiert werden. Der TenantScope-LXC selbst ist aktuell und nutzt unattended upgrades. |
 | Mittel | Offen | Die Cluster-Firewall des Virtualisierungshosts ist global deaktiviert. Die vorbereitete VM-Regel wird dadurch nicht angewendet. Die aktive LXC-eigene nftables-Regel kompensiert dies. Eine globale Aktivierung darf erst nach Prüfung der bestehenden Regeln anderer VMs erfolgen. |
 | Niedrig | Offen | Der öffentliche HSTS-Header enthält `preload`, aber kein `includeSubDomains`. Entweder alle Subdomains prüfen und `includeSubDomains` ergänzen oder `preload` entfernen. |
-| Niedrig | Offen | Schutz gegen volumetrische Angriffe liegt beim Router/NPM/Edge. Der Origin begrenzt Report-Abfragen auf 12 Anfragen pro Minute mit Burst 6 und maximal zwei gleichzeitige Proxy-Anfragen; das ist für eine Preview angemessen, ersetzt aber keinen Edge-DDoS-Schutz. |
+| Niedrig | Offen | Schutz gegen volumetrische Angriffe liegt beim Router/NPM/Edge. Der Origin begrenzt Report-Abfragen auf 30 Anfragen pro Minute mit Burst 10 und maximal zwei gleichzeitige Proxy-Anfragen; das ist für eine Preview angemessen, ersetzt aber keinen Edge-DDoS-Schutz. |
 | Niedrig | Akzeptiert | Session Storage begrenzt die Token-Lebensdauer auf den Tab, schützt aber nicht vor JavaScript-Ausführung im selben Origin. Eine strikte CSP, keine Drittanbieter-Skripte, eine enge Asset-Allowlist und sichere Linkbehandlung reduzieren dieses Restrisiko. |
 
 ## Umgesetzte Kontrollen

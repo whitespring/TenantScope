@@ -62,7 +62,7 @@ Kein Client-Secret anlegen oder eingeben. MSAL speichert die temporären OAuth-T
 
 ## Sicherheits- und Vertrauensmodell
 
-TenantScope ist eine statische SPA ohne Datenbank. Die meisten Abfragen laufen direkt vom Browser zu Microsoft Graph. Nur zwei Microsoft-Reports, deren Download-Redirect im Browser nicht zuverlässig funktioniert, werden über den lokalen Proxy übertragen. Der Proxy akzeptiert ausschließlich diese festen Report-Routen, folgt nur validierten Microsoft-Download-Zielen, begrenzt Laufzeit und Größe und speichert keine Tokens oder Reportinhalte.
+TenantScope ist eine statische SPA ohne Datenbank. Die meisten Abfragen laufen direkt vom Browser zu Microsoft Graph. Nur fünf ausgewählte Microsoft-Nutzungsreports, deren Download-Redirect im Browser nicht zuverlässig funktioniert, werden über den lokalen Proxy übertragen. Der Proxy akzeptiert ausschließlich diese festen Report-Routen, folgt nur validierten Microsoft-Download-Zielen, begrenzt Laufzeit und Größe und speichert keine Tokens oder Reportinhalte.
 
 Self-Service bedeutet hier **Bring your own App Registration**: Der Administrator trägt Tenant-ID und Client-ID ein und erteilt den angezeigten delegierten Rechten Consent. Vor dem Consent müssen Tenant, Client-ID, Herausgeber und angeforderte Rechte im Microsoft-Dialog geprüft werden. TenantScope kann technisch nicht beweisen, wem eine frei eingegebene App-ID gehört. Nach einem Test lässt sich der Zugriff im Entra Admin Center über die zugehörige Enterprise Application beziehungsweise deren Consent vollständig widerrufen.
 
@@ -70,7 +70,7 @@ Die produktive Instanz ist auf mehreren Ebenen begrenzt:
 
 - Origin-Zugriff nur vom konfigurierten Reverse-Proxy-Host; zusätzliche persistente nftables-Regel im LXC
 - kein SSH und kein Maildienst im LXC; Administration nur über Proxmox `pct`
-- Nginx-Allowlist für veröffentlichte Assets und zwei API-Routen; Source-, Test-, Deployment- und Dotfiles bleiben außerhalb des Webroots oder werden blockiert
+- Nginx-Allowlist für veröffentlichte Assets und fünf API-Routen; Source-, Test-, Deployment- und Dotfiles bleiben außerhalb des Webroots oder werden blockiert
 - CSP, Frame-Schutz, MIME-Schutz, restriktive Referrer-/Permissions-Policy und TLS 1.2/1.3
 - Rate- und Parallelitätslimits vor dem Report-Proxy
 - Proxy als `www-data` ohne Capabilities, mit `NoNewPrivileges`, Syscall-, Adressfamilien-, Speicher- und Task-Limits
@@ -105,7 +105,7 @@ Vor der Installation `__REVERSE_PROXY_IP__` in `deploy/nginx-site.conf` und `dep
 4. Erst nach erfolgreichem OAuth-, Inventur- und Exporttest die NPM-Access-List von „homelab only“ auf den gewünschten öffentlichen Zugriff umstellen.
 5. Danach Port 80 am Origin aus Nginx und nftables entfernen. Bis dahin bleibt er ausschließlich für den konfigurierten Reverse-Proxy-Host erreichbar.
 
-NPM darf weder den `Authorization`-Header noch Querystrings mit OAuth-Codes protokollieren. Die Datenschutzerklärung muss die technisch notwendigen NPM-Zugriffslogs samt Aufbewahrungsfrist sowie die flüchtige Verarbeitung der zwei Download-Reports beschreiben.
+NPM darf weder den `Authorization`-Header noch Querystrings mit OAuth-Codes protokollieren. Die Datenschutzerklärung muss die technisch notwendigen NPM-Zugriffslogs samt Aufbewahrungsfrist sowie die flüchtige Verarbeitung der ausgewählten Download-Reports beschreiben.
 
 Vorerst ausgeblendet sind MFA-/Sign-in-/Risikoberichte, Teams-Mitglieder und -Channels, Intune, Defender-Alerts/-Incidents sowie Identity Governance. Dafür fehlen im getesteten Tenant derzeit Lizenz, Rolle oder zuverlässig lesbare Daten. Microsoft Graph liefert außerdem keine kundenspezifischen Einkaufspreise; diese kommen optional aus der lokalen CSV. Downgrade-Angaben sind bewusst Prüfkandidaten: Nutzungsreports belegen Kernaktivität, aber nicht den Bedarf an Security, Compliance, Telefonie, Power Platform oder Geräteverwaltung.
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T17:06:00Z",
+  "generatedAt": "2026-09-04T13:24:11Z",
   "title": "Design System: TenantScope",
   "extensions": {
     "colorMeta": {
@@ -23,6 +23,7 @@
       { "name": "active-inventory-row", "value": "1.8s ease-in-out infinite", "purpose": "Zeigt ausschließlich am laufenden Queue-Datensatz fortgesetzte Aktivität." }
     ],
     "breakpoints": [
+      { "name": "report-sidebar", "value": "960px" },
       { "name": "mobile-workspace", "value": "780px" },
       { "name": "compact-mobile", "value": "480px" }
     ]
@@ -64,6 +65,13 @@
       "description": "Tonale Kennzahl ohne eigenen Kartenrahmen.",
       "html": "<button class=\"ds-metric\"><small>Gastkonten</small><strong>31</strong><span>Details filtern</span></button>",
       "css": ".ds-metric{min-height:126px;padding:20px;border:0;border-radius:0;color:#111827;background:#f4f5f3;text-align:left}.ds-metric small{display:block;color:#66707c;font:800 10px/1.2 ui-sans-serif,sans-serif;letter-spacing:.08em;text-transform:uppercase}.ds-metric strong{display:block;margin:13px 0 4px;font:700 31px/1 'Exo 2',ui-sans-serif,sans-serif}.ds-metric span{display:block;margin-top:16px;color:#087896;font:700 10px/1.2 ui-sans-serif,sans-serif}.ds-metric:hover{box-shadow:inset 0 -3px 0 #049bc4}.ds-metric:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}"
+    },
+    {
+      "name": "Adoption Bar",
+      "kind": "custom",
+      "description": "Workload-zentrierte Nutzungskennzahl mit Drill-down, absolutem Wert und Prozentanteil.",
+      "html": "<button class=\"ds-adoption\"><span class=\"ds-adoption-label\"><strong>SharePoint: Dateien geöffnet oder bearbeitet</strong><small>Microsoft fasst Öffnen und Bearbeiten zu einem Wert zusammen.</small></span><progress max=\"100\" value=\"38\"></progress><span class=\"ds-adoption-value\"><strong>3.812</strong> von 10.000<small>38 % nutzen es</small></span></button>",
+      "css": ".ds-adoption{width:100%;min-height:72px;padding:12px 0;display:grid;grid-template-columns:minmax(210px,.9fr) minmax(180px,2fr) 108px;gap:24px;align-items:center;border:0;border-bottom:1px solid #dfe3e6;color:#111827;background:transparent;font:400 14px/1.4 ui-sans-serif,sans-serif;text-align:left}.ds-adoption:hover{background:#f5f9fa;box-shadow:inset 3px 0 0 #049bc4}.ds-adoption:focus-visible{outline:3px solid rgba(4,155,196,.25);outline-offset:2px}.ds-adoption-label strong,.ds-adoption-label small,.ds-adoption-value strong,.ds-adoption-value small{display:block}.ds-adoption-label small,.ds-adoption-value{color:#66707c;font-size:10px}.ds-adoption progress{width:100%;height:12px;border:0;border-radius:999px;background:#e4eaed;accent-color:#049bc4}.ds-adoption-value{text-align:right;font-variant-numeric:tabular-nums}.ds-adoption-value strong{color:#102a3a;font-size:15px}@media(max-width:780px){.ds-adoption{grid-template-columns:minmax(0,1fr) 92px;gap:10px 18px}.ds-adoption progress{grid-column:1/-1}.ds-adoption-value{grid-column:2;grid-row:1}}"
     }
   ],
   "narrative": {
