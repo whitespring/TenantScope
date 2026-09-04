@@ -1,6 +1,7 @@
 {
   "name": "m365-governance-platform",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "python3 server.py --port 4173 --serve-static",
     "test": "node auth.test.mjs && node analysis.test.mjs && node docx.test.mjs && node security.test.mjs && python3 server.py --self-test"

@@ -9,7 +9,7 @@ npm install
 npm start
 ```
 
-Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter `https://tenantscope.wspg.org` (`__ORIGIN_IP__:443` hinter dem Reverse Proxy; Port 80 bleibt nur bis zur NPM-Umstellung als Übergang aktiv).
+Danach `http://localhost:4173` öffnen. Die bereitgestellte Instanz läuft unter `https://tenantscope.wspg.org`.
 
 ## Enthalten
 
@@ -68,19 +68,21 @@ Self-Service bedeutet hier **Bring your own App Registration**: Der Administrato
 
 Die produktive Instanz ist auf mehreren Ebenen begrenzt:
 
-- Origin-Zugriff nur vom NPM-Host `__REVERSE_PROXY_IP__`; zusätzliche persistente nftables-Regel im LXC
+- Origin-Zugriff nur vom konfigurierten Reverse-Proxy-Host; zusätzliche persistente nftables-Regel im LXC
 - kein SSH und kein Maildienst im LXC; Administration nur über Proxmox `pct`
 - Nginx-Allowlist für veröffentlichte Assets und zwei API-Routen; Source-, Test-, Deployment- und Dotfiles bleiben außerhalb des Webroots oder werden blockiert
 - CSP, Frame-Schutz, MIME-Schutz, restriktive Referrer-/Permissions-Policy und TLS 1.2/1.3
 - Rate- und Parallelitätslimits vor dem Report-Proxy
 - Proxy als `www-data` ohne Capabilities, mit `NoNewPrivileges`, Syscall-, Adressfamilien-, Speicher- und Task-Limits
-- automatische Debian-Sicherheitsupdates; Proxmox-Snapshot `rollback-snapshot` als Rollback-Punkt
+- automatische Debian-Sicherheitsupdates; Snapshot als Rollback-Punkt
 
 Der vollständige Stand, die Prüfnachweise und die offenen Betriebsmaßnahmen stehen in [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
 ## Vor öffentlicher Freigabe in Nginx Proxy Manager
 
-1. Forward Scheme auf `https`, Forward Host auf `__ORIGIN_IP__` und Forward Port auf `443` setzen.
+Vor der Installation `__REVERSE_PROXY_IP__` in `deploy/nginx-site.conf` und `deploy/nftables.conf` durch die interne Quelladresse des vertrauenswürdigen Reverse Proxys ersetzen.
+
+1. Forward Scheme auf `https`, Forward Host auf die interne Adresse des Origin-Servers und Forward Port auf `443` setzen.
 2. Folgenden Block unter **Advanced → Custom Nginx Configuration** einsetzen. Keine eigene `location /` definieren; sonst werden NPM-Access-List und „Block Common Exploits“ leicht umgangen.
 
    ```nginx
@@ -101,11 +103,17 @@ Der vollständige Stand, die Prüfnachweise und die offenen Betriebsmaßnahmen s
    NPM setzt `Host`, `X-Forwarded-For`, `X-Real-IP` und `X-Forwarded-Proto` in seiner Standard-Location bereits selbst; diese Header hier nicht doppelt konfigurieren.
 3. HSTS entweder auf `max-age=63072000; includeSubDomains; preload` korrigieren, wenn **alle** Subdomains dauerhaft HTTPS nutzen, oder `preload` entfernen.
 4. Erst nach erfolgreichem OAuth-, Inventur- und Exporttest die NPM-Access-List von „homelab only“ auf den gewünschten öffentlichen Zugriff umstellen.
-5. Danach Port 80 am Origin aus Nginx und nftables entfernen. Bis dahin bleibt er ausschließlich für `__REVERSE_PROXY_IP__` erreichbar.
+5. Danach Port 80 am Origin aus Nginx und nftables entfernen. Bis dahin bleibt er ausschließlich für den konfigurierten Reverse-Proxy-Host erreichbar.
 
 NPM darf weder den `Authorization`-Header noch Querystrings mit OAuth-Codes protokollieren. Die Datenschutzerklärung muss die technisch notwendigen NPM-Zugriffslogs samt Aufbewahrungsfrist sowie die flüchtige Verarbeitung der zwei Download-Reports beschreiben.
 
 Vorerst ausgeblendet sind MFA-/Sign-in-/Risikoberichte, Teams-Mitglieder und -Channels, Intune, Defender-Alerts/-Incidents sowie Identity Governance. Dafür fehlen im getesteten Tenant derzeit Lizenz, Rolle oder zuverlässig lesbare Daten. Microsoft Graph liefert außerdem keine kundenspezifischen Einkaufspreise; diese kommen optional aus der lokalen CSV. Downgrade-Angaben sind bewusst Prüfkandidaten: Nutzungsreports belegen Kernaktivität, aber nicht den Bedarf an Security, Compliance, Telefonie, Power Platform oder Geräteverwaltung.
+
+## Lizenz
+
+Der Quellcode steht unter der [GNU Affero General Public License v3.0 oder später](LICENSE). Die AGPL erlaubt auch kommerzielle Nutzung, solange ihre Bedingungen eingehalten werden.
+
+Alternativ bietet whitespring eine gesonderte kommerzielle Lizenz für Organisationen an, die TenantScope ohne die AGPL-Pflichten in proprietären Produkten oder Diensten einsetzen möchten. Diese Rechte entstehen ausschließlich durch eine separate schriftliche Vereinbarung. Details stehen in [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
 
 ## Test
 

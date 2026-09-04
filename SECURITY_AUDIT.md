@@ -1,7 +1,7 @@
 # TenantScope Security Audit
 
 Stand: 3. September 2026
-Zielsystem: `https://tenantscope.wspg.org` · Origin-Container auf VIRTUALIZATION_HOST · Origin `__ORIGIN_IP__`
+Zielsystem: `https://tenantscope.wspg.org`
 Ergebnis: **bedingt für eine öffentliche Preview freigabefähig**
 
 Die Anwendung selbst und der LXC sind gehärtet. Vor einer uneingeschränkt öffentlichen Freigabe müssen noch die TLS-Verbindung zwischen Nginx Proxy Manager und Origin aktiviert und ein vollständiger OAuth-/Inventur-/Export-Smoke-Test mit einem echten Tenant durchgeführt werden.
@@ -24,14 +24,14 @@ Nicht enthalten sind ein externer Penetrationstest, Microsoft-Tenant-Konfigurati
 
 | Schwere | Status | Befund und Maßnahme |
 |---|---|---|
-| Hoch | **Offen vor Public Launch** | NPM leitet aktuell per HTTP an Port 80 des Origins weiter. Damit können Bearer-Token der zwei Download-Reports im internen Segment unverschlüsselt übertragen werden. Origin-TLS ist auf Port 443 vorbereitet; NPM muss auf `https://__ORIGIN_IP__:443` umgestellt werden. Anschließend Port 80 entfernen. |
+| Hoch | **Offen vor Public Launch** | NPM leitet aktuell per HTTP an Port 80 des Origins weiter. Damit können Bearer-Token der zwei Download-Reports im internen Segment unverschlüsselt übertragen werden. Origin-TLS ist auf Port 443 vorbereitet; NPM muss auf HTTPS und Port 443 des internen Origin-Hosts umgestellt werden. Anschließend Port 80 entfernen. |
 | Hoch | Behoben | Der ursprüngliche Python-Server konnte als Static-File-Server laufen. Produktion nutzt jetzt ausschließlich `BaseHTTPRequestHandler`; statische Auslieferung ist nur im expliziten lokalen Entwicklungsmodus aktiv. |
 | Hoch | Behoben | Graph-Folge-URLs und Report-Redirects hätten als Token-/SSRF-Grenze missbraucht werden können. Graph-Ziele sind exakt auf HTTPS `graph.microsoft.com` begrenzt; Download-Redirects ausschließlich auf HTTPS `reports*.office.com`, Port 443 und `/data/`. Authorization wird nicht an das Download-Ziel weitergegeben. |
-| Hoch | Behoben | Origin und SSH waren im LAN erreichbar. Eine bootfeste nftables-Policy akzeptiert neue HTTP-/HTTPS-Verbindungen nur von `__REVERSE_PROXY_IP__`; SSH und Postfix sind deaktiviert und maskiert. Direkte Verbindungsversuche laufen in einen Timeout. |
+| Hoch | Behoben | Origin und SSH waren im LAN erreichbar. Eine bootfeste nftables-Policy akzeptiert neue HTTP-/HTTPS-Verbindungen nur vom konfigurierten Reverse-Proxy-Host; SSH und Postfix sind deaktiviert und maskiert. Direkte Verbindungsversuche laufen in einen Timeout. |
 | Mittel | **Offen vor Public Launch** | Der echte Ende-zu-Ende-Test mit Admin-Consent, Popup-Rückkehr, allen gewählten Abfragen sowie MD-/DOCX-/PDF-Export benötigt ein reales Microsoft-Konto. Dieser Test kann nicht mit einem synthetischen Token ersetzt werden. |
 | Mittel | Offen | Self-Service akzeptiert eine frei eingegebene Client-ID. Das ermöglicht mehrere Tenants, beweist aber nicht die Eigentümerschaft der App-Registrierung. Der Consent-Dialog muss Tenant, Herausgeber, Client-ID und Scopes sichtbar bestätigen. Für ein stärker zentral kontrolliertes Produkt wäre eine feste, verifizierte Multi-Tenant-App die Alternative. |
 | Mittel | Offen | Der Proxmox-Host hat ausstehende Sicherheits- und Plattformupdates. Diese betreffen den gemeinsam genutzten Host und müssen in einem eigenen Wartungsfenster mit Cluster-/VM-Folgenabschätzung installiert werden. Der TenantScope-LXC selbst ist aktuell und nutzt unattended upgrades. |
-| Mittel | Offen | Die Proxmox-Cluster-Firewall ist global deaktiviert. Die VM-Regel für 118 ist vorbereitet, wird dadurch aber nicht angewendet. Die aktive LXC-eigene nftables-Regel kompensiert dies. Eine globale Aktivierung darf erst nach Prüfung der bestehenden Regeln anderer VMs erfolgen. |
+| Mittel | Offen | Die Cluster-Firewall des Virtualisierungshosts ist global deaktiviert. Die vorbereitete VM-Regel wird dadurch nicht angewendet. Die aktive LXC-eigene nftables-Regel kompensiert dies. Eine globale Aktivierung darf erst nach Prüfung der bestehenden Regeln anderer VMs erfolgen. |
 | Niedrig | Offen | Der öffentliche HSTS-Header enthält `preload`, aber kein `includeSubDomains`. Entweder alle Subdomains prüfen und `includeSubDomains` ergänzen oder `preload` entfernen. |
 | Niedrig | Offen | Schutz gegen volumetrische Angriffe liegt beim Router/NPM/Edge. Der Origin begrenzt Report-Abfragen auf 12 Anfragen pro Minute mit Burst 6 und maximal zwei gleichzeitige Proxy-Anfragen; das ist für eine Preview angemessen, ersetzt aber keinen Edge-DDoS-Schutz. |
 | Niedrig | Akzeptiert | Session Storage begrenzt die Token-Lebensdauer auf den Tab, schützt aber nicht vor JavaScript-Ausführung im selben Origin. Eine strikte CSP, keine Drittanbieter-Skripte, eine enge Asset-Allowlist und sichere Linkbehandlung reduzieren dieses Restrisiko. |
@@ -61,7 +61,7 @@ Nicht enthalten sind ein externer Penetrationstest, Microsoft-Tenant-Konfigurati
 - Proxy nur auf `127.0.0.1:8080`; systemd-Exposure-Score 3,3 („OK“), eigener Benutzer `www-data`, keine Capabilities, `NoNewPrivileges`, `MemoryDenyWriteExecute`, Namespace-/Realtime-/SUID-/Syscall-/Adressfamilien- und Ressourcenbegrenzungen.
 - LXC-Firewall: Input standardmäßig DROP, Loopback und bestehende Verbindungen erlaubt, HTTP/HTTPS nur vom NPM-Host; Forward DROP, Output ACCEPT.
 - SSH und Postfix deaktiviert/maskiert. Offene Sockets: 80/443, intern 127.0.0.1:8080.
-- Rollback-Snapshot: `rollback-snapshot`.
+- Rollback-Snapshot vorhanden.
 
 ## Verifikation
 

@@ -46,7 +46,8 @@ for (const setting of ['NoNewPrivileges=true', 'RestrictNamespaces=true', 'Capab
   assert.ok(service.includes(setting), `systemd hardening must include ${setting}`);
 }
 assert.match(firewall, /chain input[\s\S]*policy drop/);
-assert.match(firewall, /ip saddr 192\.168\.0\.250 tcp dport \{ 80, 443 \}/);
+assert.match(nginx, /allow __REVERSE_PROXY_IP__;/);
+assert.match(firewall, /ip saddr __REVERSE_PROXY_IP__ tcp dport \{ 80, 443 \}/);
 assert.match(firewall, /chain output[\s\S]*policy accept/);
 
 console.log('Security hardening self-check passed');
