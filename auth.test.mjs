@@ -29,7 +29,12 @@ assert.match(app, /filter\(\(\{ id \}\) => id !== 'service'\)/, 'service health 
 assert.match(app, /if \(options\.recommendations\)/, 'recommendation summary must be optional');
 assert.match(app, /report: 'm365-apps'/, 'M365 app usage must use the local report collector');
 assert.match(app, /report: 'copilot'/, 'Copilot usage must use the local report collector');
-assert.match(app, /fetch\(`\/api\/reports\/\$\{report\}`/, 'report downloads must use the same-origin server endpoint');
+assert.match(app, /fetch\(`\/api\/reports\/\$\{report\}\?period=\$\{encodeURIComponent\(period\)\}`/, 'report downloads must use the same-origin server endpoint with a validated period');
+for (const report of ['sharepoint-activity', 'onedrive-activity', 'viva-engage']) assert.match(app, new RegExp(`report: '${report}'`), `${report} must use the report collector`);
+assert.match(app, /data-usage-period/, 'adoption reporting must expose a live D7/D30/D90/D180 period filter');
+assert.match(app, /<progress max="100"/, 'workload adoption must use an accessible native progress visualization');
+assert.match(app, /data-adoption-index/, 'adoption bars must drill down into the underlying user list');
+assert.match(app, /data-show-all="true"/, 'paginated details must offer an explicit all-items view');
 assert.match(app, /setupPagination\(reportContent\)/, 'rendered lists must initialize pagination');
 assert.match(app, /const metricFilterRules/, 'area metrics must define their underlying detail filters');
 assert.match(app, /function applyMetricFilter/, 'area metrics must filter their underlying detail tables');

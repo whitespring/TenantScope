@@ -141,6 +141,37 @@ assert.equal(usage.details.rows[0][0], 'Ada Lovelace');
 assert.equal(usage.details.rows[0][2], 'Word');
 assert.equal(usage.details.rows[0][5], 'FLOW_FREE, O365_BUSINESS_PREMIUM');
 
+const adoption = analyseUsage(
+  [
+    { displayName: 'Ada', userPrincipalName: 'ada@example.com', accountEnabled: true, userType: 'Member', assignedLicenses: [{}] },
+    { displayName: 'Grace', userPrincipalName: 'grace@example.com', accountEnabled: true, userType: 'Member', assignedLicenses: [{}] },
+  ],
+  [
+    { userPrincipalName: 'ada@example.com', word: true, teams: true },
+    { userPrincipalName: 'grace@example.com', word: false, teams: true },
+  ],
+  [],
+  [
+    { userPrincipalName: 'ada@example.com', lastActivityDate: '2026-09-01', teamChatMessageCount: 4, meetingCount: 1 },
+    { userPrincipalName: 'grace@example.com', lastActivityDate: '2026-09-01', teamChatMessageCount: 0, meetingCount: 2 },
+  ],
+  [{ userPrincipalName: 'ada@example.com', sendCount: 3 }, { userPrincipalName: 'grace@example.com', sendCount: 0 }],
+  [{ userPrincipalName: 'ada@example.com', lastActivityDate: '2026-09-01', wordCopilotLastActivityDate: '2026-09-01' }],
+  {},
+  [{ userPrincipalName: 'ada@example.com', viewedOrEditedFileCount: 5 }, { userPrincipalName: 'grace@example.com', viewedOrEditedFileCount: 0 }],
+  [{ userPrincipalName: 'ada@example.com', viewedOrEditedFileCount: 2 }],
+  [{ userPrincipalName: 'ada@example.com', postedCount: 1 }, { userPrincipalName: 'grace@example.com', postedCount: 0 }],
+  'D30',
+  { apps: true, teams: true, email: true, sharePoint: true, oneDrive: false, viva: true, copilot: true },
+);
+const adoptionMetric = (label) => adoption.adoption.metrics.find((item) => item.label === label);
+assert.equal(adoption.details.title, 'Nutzung je Benutzer (30 Tage)');
+assert.deepEqual([adoptionMetric('Word').active, adoptionMetric('Word').total, adoptionMetric('Word').percent], [1, 2, 50]);
+assert.deepEqual([adoptionMetric('Teams: Besprechungen').active, adoptionMetric('Teams: Besprechungen').percent], [2, 100]);
+assert.deepEqual([adoptionMetric('SharePoint: Dateien geöffnet oder bearbeitet').active, adoptionMetric('SharePoint: Dateien geöffnet oder bearbeitet').percent], [1, 50]);
+assert.equal(adoptionMetric('OneDrive: Dateien geöffnet oder bearbeitet').available, false);
+assert.equal(adoption.extraDetails[0].rows.length, 19);
+
 const teamInventory = new Map([['t1:owners', []]]);
 assert.equal(analyseTeams([{ id: 't1', displayName: 'Team 1', visibility: 'Private' }], teamInventory).findings[0].severity, 'high');
 

@@ -445,15 +445,18 @@ export function analyseStorage(users, mailboxReports, oneDriveReports) {
   };
 }
 
-export function analyseUsage(users = [], appReports = [], activeReports = [], teamsReports = [], emailReports = [], copilotReports = [], reportSettings = {}) {
+export function analyseUsage(users = [], appReports = [], activeReports = [], teamsReports = [], emailReports = [], copilotReports = [], reportSettings = {}, sharePointReports = [], oneDriveReports = [], vivaReports = [], period = 'D90', availability = {}) {
   const byKey = (items, property = 'userPrincipalName') => new Map(items.filter((item) => item[property]).map((item) => [normalized(item[property]), item]));
   const appsByUser = byKey(appReports);
   const activeByUser = byKey(activeReports);
   const teamsByUser = byKey(teamsReports);
   const emailByUser = byKey(emailReports);
   const copilotByUser = byKey(copilotReports);
+  const sharePointByUser = byKey(sharePointReports);
+  const oneDriveByUser = byKey(oneDriveReports);
+  const vivaByUser = byKey(vivaReports);
   const concealed = reportSettings.displayConcealedNames === true;
-  const reportKeys = new Set([...appsByUser.keys(), ...activeByUser.keys(), ...teamsByUser.keys(), ...emailByUser.keys(), ...copilotByUser.keys()]);
+  const reportKeys = new Set([...appsByUser.keys(), ...activeByUser.keys(), ...teamsByUser.keys(), ...emailByUser.keys(), ...copilotByUser.keys(), ...sharePointByUser.keys(), ...oneDriveByUser.keys(), ...vivaByUser.keys()]);
   const directoryByUser = byKey(users);
   const allKeys = concealed ? reportKeys : new Set([...directoryByUser.keys(), ...reportKeys]);
   const rows = [...allKeys].map((key) => {
@@ -464,13 +467,16 @@ export function analyseUsage(users = [], appReports = [], activeReports = [], te
     const teams = teamsByUser.get(key) || {};
     const email = emailByUser.get(key) || {};
     const copilot = copilotByUser.get(key) || {};
+    const sharePoint = sharePointByUser.get(key) || {};
+    const oneDrive = oneDriveByUser.get(key) || {};
+    const viva = vivaByUser.get(key) || {};
     const usedApps = [['Outlook', appUsage.outlook], ['Word', appUsage.word], ['Excel', appUsage.excel], ['PowerPoint', appUsage.powerPoint], ['OneNote', appUsage.oneNote], ['Teams', appUsage.teams]].filter(([, used]) => used).map(([name]) => name);
     const platforms = [['Windows', appUsage.windows], ['Mac', appUsage.mac], ['Mobile', appUsage.mobile], ['Web', appUsage.web]].filter(([, used]) => used).map(([name]) => name);
     const serviceDates = [['Exchange', active.exchangeLastActivityDate], ['OneDrive', active.oneDriveLastActivityDate], ['SharePoint', active.sharePointLastActivityDate], ['Teams', active.teamsLastActivityDate], ['Viva Engage', active.yammerLastActivityDate]].filter(([, value]) => value);
     const copilotApps = [['Chat', copilot.copilotChatLastActivityDate], ['Teams', copilot.microsoftTeamsCopilotLastActivityDate], ['Word', copilot.wordCopilotLastActivityDate], ['Excel', copilot.excelCopilotLastActivityDate], ['PowerPoint', copilot.powerPointCopilotLastActivityDate], ['Outlook', copilot.outlookCopilotLastActivityDate], ['OneNote', copilot.oneNoteCopilotLastActivityDate], ['Loop', copilot.loopCopilotLastActivityDate], ['Edge', copilot.edgeLastActivityDate], ['Agent', copilot.copilotAgentLastActivityDate]].filter(([, value]) => value);
-    const lastActivity = latestDate([apps.lastActivityDate, teams.lastActivityDate, email.lastActivityDate, copilot.lastActivityDate, ...serviceDates.map(([, value]) => value)]);
+    const lastActivity = latestDate([apps.lastActivityDate, teams.lastActivityDate, email.lastActivityDate, copilot.lastActivityDate, sharePoint.lastActivityDate, oneDrive.lastActivityDate, viva.lastActivityDate, ...serviceDates.map(([, value]) => value)]);
     return {
-      user, key, apps, active, teams, email, copilot, usedApps, platforms, serviceDates, copilotApps, lastActivity,
+      user, key, apps, active, teams, email, copilot, sharePoint, oneDrive, viva, usedApps, platforms, serviceDates, copilotApps, lastActivity,
       hasActivity: Boolean(lastActivity || usedApps.length || serviceDates.length),
     };
   }).sort((a, b) => String(b.lastActivity || '').localeCompare(String(a.lastActivity || '')));
@@ -479,26 +485,74 @@ export function analyseUsage(users = [], appReports = [], activeReports = [], te
   const copilotInactive = copilotReports.filter((entry) => !entry.lastActivityDate);
   const findings = [];
 
-  if (inactiveLicensed.length) findings.push(finding('medium', `${inactiveLicensed.length} lizenzierte Konten ohne Aktivität im 90-Tage-Fenster`, 'Für diese aktiven Konten wurde in den ausgewerteten Microsoft-365-Reports keine Nutzung gefunden.', 'Fachlichen Bedarf und passende Lizenzstufe prüfen; technische und gemeinsam genutzte Konten separat bewerten.'));
+  const periodDays = Number(period.slice(1)) || 90;
+  if (inactiveLicensed.length) findings.push(finding('medium', `${inactiveLicensed.length} lizenzierte Konten ohne Aktivität im ${periodDays}-Tage-Fenster`, 'Für diese aktiven Konten wurde in den ausgewerteten Microsoft-365-Reports keine Nutzung gefunden.', 'Fachlichen Bedarf und passende Lizenzstufe prüfen; technische und gemeinsam genutzte Konten separat bewerten.'));
   if (copilotInactive.length) findings.push(finding('medium', `${copilotInactive.length} Copilot-Konten ohne gemeldete Aktivität`, 'Der Copilot-Nutzungsreport enthält lizenzierte oder aktivierte Konten ohne letzte Nutzung.', 'Enablement, Lizenzbedarf und geeignete Anwendungsszenarien prüfen.'));
   if (concealed) findings.push(finding('info', 'Benutzernamen in Reports verborgen', 'Die Tenant-Einstellung anonymisiert Benutzer-, Gruppen- und Site-Angaben in Microsoft-365-Nutzungsreports.', 'Für personenbezogene Lizenzoptimierung muss ein Administrator die Report-Anonymisierung bewusst deaktivieren.'));
-  if (!findings.length) findings.push(finding('ok', 'Keine deutliche Nutzungslücke erkannt', 'Alle zuordenbaren aktiven Lizenzkonten zeigen Aktivität in mindestens einem ausgewerteten 90-Tage-Report.', 'Nutzungstrends und Lizenzbedarf quartalsweise neu bewerten.'));
+  if (!findings.length) findings.push(finding('ok', 'Keine deutliche Nutzungslücke erkannt', `Alle zuordenbaren aktiven Lizenzkonten zeigen Aktivität in mindestens einem ausgewerteten ${periodDays}-Tage-Report.`, 'Nutzungstrends und Lizenzbedarf quartalsweise neu bewerten.'));
+
+  const detailsTitle = `Nutzung je Benutzer (${periodDays} Tage)`;
+  const usable = (items) => items.filter((item) => item.isDeleted !== true && item.isLicensed !== false);
+  const usageMetric = (group, label, source, sourceId, predicate, column, description) => {
+    const reportRows = usable(source);
+    const available = availability[sourceId] !== false;
+    const activeCount = available ? reportRows.filter(predicate).length : 0;
+    return {
+      group, label, active: activeCount, total: available ? reportRows.length : 0,
+      percent: available && reportRows.length ? Math.round(activeCount / reportRows.length * 100) : 0,
+      available, description, detailTitle: detailsTitle, sortBy: column,
+      conditions: [{ column, operator: column.endsWith('Apps') ? 'notMissing' : 'numberAbove', value: 0 }],
+    };
+  };
+  const appMetric = (label) => ({
+    ...usageMetric('Microsoft-365-Apps', label, appReports, 'apps', (item) => Boolean((item.details?.[0] || item)[label === 'PowerPoint' ? 'powerPoint' : label === 'OneNote' ? 'oneNote' : normalized(label)]), 'Apps', 'Im Microsoft-365-App-Report im gewählten Zeitraum als verwendet gemeldet.'),
+    sortBy: 'Letzte Aktivität',
+    conditions: [{ column: 'Apps', operator: 'contains', value: label }],
+  });
+  const groupOrder = ['Microsoft-365-Apps', 'Zusammenarbeit & Kommunikation', 'Inhalte & Wissen', 'Community & KI'];
+  const adoption = [
+    ...['Word', 'Excel', 'PowerPoint', 'Outlook', 'OneNote', 'Teams'].map(appMetric),
+    usageMetric('Zusammenarbeit & Kommunikation', 'Teams: Team-/Kanalnachrichten', teamsReports, 'teams', (item) => Number(item.teamChatMessageCount || 0) > 0, 'Teams Kanalnachrichten', 'Mindestens eine Team- oder Kanalnachricht im gewählten Zeitraum.'),
+    usageMetric('Zusammenarbeit & Kommunikation', 'Teams: Posts oder Antworten', teamsReports, 'teams', (item) => Number(item.postMessages || 0) + Number(item.replyMessages || 0) > 0, 'Teams Posts/Antworten', 'Mindestens ein neuer Beitrag oder eine Antwort; Microsoft stellt diese Zähler nur in unterstützten Reportversionen bereit.'),
+    usageMetric('Zusammenarbeit & Kommunikation', 'Teams: private Chats', teamsReports, 'teams', (item) => Number(item.privateChatMessageCount || 0) > 0, 'Teams private Nachrichten', 'Mindestens eine private Chatnachricht im gewählten Zeitraum.'),
+    usageMetric('Zusammenarbeit & Kommunikation', 'Teams: Besprechungen', teamsReports, 'teams', (item) => Number(item.meetingCount || 0) > 0, 'Meetings', 'Mindestens eine gemeldete Teams-Besprechungsaktivität.'),
+    usageMetric('Zusammenarbeit & Kommunikation', 'Teams: Anrufe', teamsReports, 'teams', (item) => Number(item.callCount || 0) > 0, 'Calls', 'Mindestens ein gemeldeter Teams-Anruf.'),
+    usageMetric('Zusammenarbeit & Kommunikation', 'E-Mail gesendet', emailReports, 'email', (item) => Number(item.sendCount || 0) > 0, 'E-Mail gesendet', 'Mindestens eine gesendete E-Mail im Exchange-Aktivitätsreport.'),
+    usageMetric('Inhalte & Wissen', 'SharePoint: Dateien geöffnet oder bearbeitet', sharePointReports, 'sharePoint', (item) => Number(item.viewedOrEditedFileCount || 0) > 0, 'SharePoint Dateien geöffnet/bearbeitet', 'Microsoft fasst Öffnen und Bearbeiten in diesem Nutzungsreport zu einem Wert zusammen.'),
+    usageMetric('Inhalte & Wissen', 'SharePoint: Seiten besucht', sharePointReports, 'sharePoint', (item) => Number(item.visitedPageCount || 0) > 0, 'SharePoint Seiten besucht', 'Mindestens eine SharePoint-Seite im gewählten Zeitraum besucht.'),
+    usageMetric('Inhalte & Wissen', 'SharePoint: intern geteilt', sharePointReports, 'sharePoint', (item) => Number(item.sharedInternallyFileCount || 0) > 0, 'SharePoint intern geteilt', 'Mindestens eine Datei intern geteilt.'),
+    usageMetric('Inhalte & Wissen', 'OneDrive: Dateien geöffnet oder bearbeitet', oneDriveReports, 'oneDrive', (item) => Number(item.viewedOrEditedFileCount || 0) > 0, 'OneDrive Dateien geöffnet/bearbeitet', 'Microsoft fasst Öffnen und Bearbeiten in diesem Nutzungsreport zu einem Wert zusammen.'),
+    usageMetric('Inhalte & Wissen', 'OneDrive: intern geteilt', oneDriveReports, 'oneDrive', (item) => Number(item.sharedInternallyFileCount || 0) > 0, 'OneDrive intern geteilt', 'Mindestens eine OneDrive-Datei intern geteilt.'),
+    usageMetric('Community & KI', 'Viva Engage: Beiträge', vivaReports, 'viva', (item) => Number(item.postedCount || 0) > 0, 'Viva Beiträge', 'Mindestens ein Beitrag in Viva Engage im gewählten Zeitraum.'),
+    { ...usageMetric('Community & KI', 'Microsoft 365 Copilot', copilotReports, 'copilot', (item) => Boolean(item.lastActivityDate || [['copilotChatLastActivityDate'], ['microsoftTeamsCopilotLastActivityDate'], ['wordCopilotLastActivityDate'], ['excelCopilotLastActivityDate'], ['powerPointCopilotLastActivityDate'], ['outlookCopilotLastActivityDate']].some(([key]) => item[key])), 'Copilot-Apps', 'Mindestens eine gemeldete Copilot-Aktivität; Inhalte und Prompts werden nicht gelesen.'), sortBy: 'Letzte Aktivität' },
+  ].sort((left, right) => groupOrder.indexOf(left.group) - groupOrder.indexOf(right.group) || right.percent - left.percent || left.label.localeCompare(right.label, 'de'));
+
+  const nameFor = (row) => row.user?.displayName || row.user?.userPrincipalName || row.apps.userPrincipalName || row.active.userPrincipalName || row.teams.userPrincipalName || row.email.userPrincipalName || row.copilot.userPrincipalName || row.sharePoint.userPrincipalName || row.oneDrive.userPrincipalName || row.viva.userPrincipalName || row.key;
+  const detailRows = rows.map((row) => [
+    nameFor(row), date(row.lastActivity), row.usedApps.join(', ') || '–', row.platforms.join(', ') || '–', row.serviceDates.map(([name]) => name).join(', ') || '–', sortedList(row.active.assignedProducts || []) || '–',
+    String(Number(row.teams.teamChatMessageCount || 0) + Number(row.teams.privateChatMessageCount || 0)), String(row.teams.callCount || 0), String(row.teams.meetingCount || 0),
+    `${row.email.sendCount || 0}/${row.email.readCount || 0}/${row.email.receiveCount || 0}`, row.copilotApps.map(([name]) => name).join(', ') || '–',
+    String(row.teams.teamChatMessageCount || 0), String(Number(row.teams.postMessages || 0) + Number(row.teams.replyMessages || 0)), String(row.teams.privateChatMessageCount || 0), String(row.email.sendCount || 0),
+    String(row.sharePoint.viewedOrEditedFileCount || 0), String(row.sharePoint.visitedPageCount || 0), String(row.sharePoint.sharedInternallyFileCount || 0),
+    String(row.oneDrive.viewedOrEditedFileCount || 0), String(row.oneDrive.sharedInternallyFileCount || 0), String(row.viva.postedCount || 0),
+  ]);
 
   return {
     records: rows.length,
     summary: `${rows.length} Nutzerprofile aus Microsoft-365-Reports zusammengeführt`,
     metrics: [[String(rows.filter((row) => row.hasActivity).length), 'aktive Nutzerprofile'], [String(inactiveLicensed.length), 'lizenzierte ohne Aktivität'], [String(copilotReports.length), 'Copilot-Profile'], [concealed ? 'Aktiv' : 'Nein', 'Anonymisierung']],
     findings,
+    adoption: { period, periodDays, metrics: adoption },
     details: {
-      title: 'Nutzung je Benutzer (90 Tage)',
-      columns: ['Benutzer', 'Letzte Aktivität', 'Apps', 'Plattformen', 'Dienste', 'Lizenzprodukte', 'Teams Chats', 'Calls', 'Meetings', 'E-Mail gesendet/gelesen/empfangen', 'Copilot-Apps'],
-      rows: rows.map((row) => [
-        row.user?.displayName || row.user?.userPrincipalName || row.apps.userPrincipalName || row.active.userPrincipalName || row.teams.userPrincipalName || row.email.userPrincipalName || row.copilot.userPrincipalName || row.key,
-        date(row.lastActivity), row.usedApps.join(', ') || '–', row.platforms.join(', ') || '–', row.serviceDates.map(([name]) => name).join(', ') || '–', sortedList(row.active.assignedProducts || []) || '–',
-        String(Number(row.teams.teamChatMessageCount || 0) + Number(row.teams.privateChatMessageCount || 0)), String(row.teams.callCount || 0), String(row.teams.meetingCount || 0),
-        `${row.email.sendCount || 0}/${row.email.readCount || 0}/${row.email.receiveCount || 0}`, row.copilotApps.map(([name]) => name).join(', ') || '–',
-      ]),
+      title: detailsTitle,
+      columns: ['Benutzer', 'Letzte Aktivität', 'Apps', 'Plattformen', 'Dienste', 'Lizenzprodukte', 'Teams Chats', 'Calls', 'Meetings', 'E-Mail gesendet/gelesen/empfangen', 'Copilot-Apps', 'Teams Kanalnachrichten', 'Teams Posts/Antworten', 'Teams private Nachrichten', 'E-Mail gesendet', 'SharePoint Dateien geöffnet/bearbeitet', 'SharePoint Seiten besucht', 'SharePoint intern geteilt', 'OneDrive Dateien geöffnet/bearbeitet', 'OneDrive intern geteilt', 'Viva Beiträge'],
+      rows: detailRows,
     },
+    extraDetails: [{
+      title: `Adoption nach App und Funktion (${periodDays} Tage)`,
+      columns: ['Bereich', 'App oder Funktion', 'Aktive Konten', 'Auswertbare Konten', 'Anteil', 'Definition'],
+      rows: adoption.map((item) => [item.group, item.label, item.available ? String(item.active) : '–', item.available ? String(item.total) : '–', item.available ? `${item.percent} %` : 'Nicht auswertbar', item.description]),
+    }],
   };
 }
 

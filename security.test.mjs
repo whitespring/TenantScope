@@ -21,7 +21,7 @@ assert.match(server, /MAX_REPORT_BYTES = 20 \* 1024 \* 1024/, 'report memory use
 assert.match(server, /build_opener\(NoRedirect\)[\s\S]*location/, 'report downloads must reject follow-up redirects');
 assert.match(nginx, /frame-ancestors 'none'/, 'CSP must block framing');
 assert.match(nginx, /X-Content-Type-Options "nosniff"/, 'responses must disable MIME sniffing');
-assert.match(nginx, /location ~ \^\/api\/reports\/\(m365-apps\|copilot\)\$/, 'only known report routes may reach the proxy');
+assert.match(nginx, /location ~ \^\/api\/reports\/\(m365-apps\|copilot\|sharepoint-activity\|onedrive-activity\|viva-engage\)\$/, 'only known report routes may reach the proxy');
 assert.match(nginx, /limit_req zone=tenantscope_reports/, 'report collection must be rate limited');
 assert.match(nginx, /limit_conn tenantscope_global 2/, 'report collection must have a global concurrency limit');
 assert.match(nginx, /proxy_buffering off/, 'report payloads must not be buffered to disk');

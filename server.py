@@ -11,9 +11,13 @@ from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, Thread
 
 
 REPORTS = {
-    "m365-apps": "https://graph.microsoft.com/v1.0/reports/getM365AppUserDetail(period='D90')?$format=text/csv",
-    "copilot": "https://graph.microsoft.com/v1.0/copilot/reports/getMicrosoft365CopilotUsageUserDetail(period='D90',version='v2')",
+    "m365-apps": "/v1.0/reports/getM365AppUserDetail(period='{period}')?$format=text/csv",
+    "copilot": "/v1.0/copilot/reports/getMicrosoft365CopilotUsageUserDetail(period='{period}',version='v2')",
+    "sharepoint-activity": "/v1.0/reports/getSharePointActivityUserDetail(period='{period}')?$format=text/csv",
+    "onedrive-activity": "/v1.0/reports/getOneDriveActivityUserDetail(period='{period}')?$format=text/csv",
+    "viva-engage": "/v1.0/reports/getYammerActivityUserDetail(period='{period}')?$format=text/csv",
 }
+REPORT_PERIODS = {"D7", "D30", "D90", "D180"}
 REPORT_DOWNLOAD_HOST = re.compile(r"^reports[a-z0-9-]*\.office\.com$")
 MAX_REPORT_BYTES = 20 * 1024 * 1024
 MAX_ERROR_BYTES = 64 * 1024
@@ -44,8 +48,14 @@ def is_report_download_url(location):
         return False
 
 
-def download_report(report, authorization):
-    request = urllib.request.Request(REPORTS[report], headers={"Authorization": authorization, "Accept": "text/csv"})
+def report_url(report, period):
+    if report not in REPORTS or period not in REPORT_PERIODS:
+        raise ValueError("Unzulässiger Report oder Zeitraum.")
+    return "https://graph.microsoft.com" + REPORTS[report].format(period=period)
+
+
+def download_report(report, period, authorization):
+    request = urllib.request.Request(report_url(report, period), headers={"Authorization": authorization, "Accept": "text/csv"})
     try:
         response = urllib.request.build_opener(NoRedirect).open(request, timeout=120)
     except urllib.error.HTTPError as error:
@@ -72,14 +82,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(405, {"error": {"code": "methodNotAllowed", "message": "Methode nicht erlaubt."}})
 
     def do_POST(self):
-        report = self.path.removeprefix("/api/reports/")
+        target = urllib.parse.urlsplit(self.path)
+        report = target.path.removeprefix("/api/reports/")
+        query = urllib.parse.parse_qs(target.query, keep_blank_values=True)
+        period = query.get("period", ["D90"])[0]
         authorization = self.headers.get("Authorization", "")
-        if self.path != f"/api/reports/{report}" or report not in REPORTS:
+        if target.path != f"/api/reports/{report}" or report not in REPORTS or set(query) - {"period"}:
             return self.send_json(404, {"error": {"code": "notFound", "message": "Report nicht gefunden."}})
+        if len(query.get("period", [])) > 1 or period not in REPORT_PERIODS:
+            return self.send_json(400, {"error": {"code": "invalidPeriod", "message": "Zeitraum muss D7, D30, D90 oder D180 sein."}})
         if not authorization.startswith("Bearer ") or not 32 <= len(authorization) <= MAX_AUTHORIZATION_BYTES:
             return self.send_json(401, {"error": {"code": "unauthorized", "message": "Microsoft-Graph-Token fehlt."}})
         try:
-            rows = download_report(report, authorization)
+            rows = download_report(report, period, authorization)
             self.send_json(200, {"value": rows})
         except urllib.error.HTTPError as error:
             self.audit_error(report, f"graph-http-{error.code}")
@@ -128,6 +143,12 @@ if __name__ == "__main__":
         assert not is_report_download_url("https://reports.office.com.evil.example/data/download/one")
         assert not is_report_download_url("http://reportsweu.office.com/data/download/one")
         assert not is_report_download_url("https://reports.office.com/private/download/one")
+        assert report_url("sharepoint-activity", "D30") == "https://graph.microsoft.com/v1.0/reports/getSharePointActivityUserDetail(period='D30')?$format=text/csv"
+        try:
+            report_url("m365-apps", "D365")
+            raise AssertionError("invalid report period accepted")
+        except ValueError:
+            pass
         assert MAX_REPORT_BYTES == 20 * 1024 * 1024
         print("Report proxy self-check passed")
     else:

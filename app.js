@@ -36,6 +36,8 @@ const SESSION_KEY = 'tenant-scope-poc';
 const USAGE_NOTICE_KEY = 'tenant-scope-usage-notice-v1';
 const AUTH_MODE_KEY = 'tenant-scope-auth-mode';
 const ADMIN_CONSENT_STATE_KEY = 'tenant-scope-admin-consent-state';
+const USAGE_PERIOD_KEY = 'tenant-scope-usage-period';
+const usagePeriods = new Set(['D7', 'D30', 'D90', 'D180']);
 const scopes = [
   {
     id: 'tenant', name: 'Tenant & Domains', tag: 'Mandant',
@@ -149,7 +151,7 @@ const scopeGuidance = {
     explanation: 'Die Nutzungsdaten stammen aus Microsoft-365-Berichten und zeigen Aktivität, nicht Produktivität oder Qualität. Berichte können 24 bis 72 Stunden verzögert und durch die Datenschutzoption anonymisiert sein.',
     goodPractice: '90-Tage-Trends für Enablement und Lizenzentscheidungen verwenden, nicht zur individuellen Leistungskontrolle. Rollen, Saisonverläufe sowie technische Konten berücksichtigen und Zweck, Zugriff und Datenschutz transparent dokumentieren.',
     helpUrl: 'https://learn.microsoft.com/en-us/microsoft-365/admin/activity-reports/activity-reports?view=o365-worldwide',
-    adminLinks: [['Nutzungsberichte öffnen', 'https://admin.microsoft.com/Adminportal/Home#/reportsUsage'], ['Reporteinstellungen öffnen', 'https://admin.microsoft.com/Adminportal/Home#/Settings/Services/:/Settings/L1/Reports']],
+    adminLinks: [['Nutzungsberichte öffnen', 'https://admin.microsoft.com/Adminportal/Home#/reportsUsage'], ['Adoption Score öffnen', 'https://admin.microsoft.com/Adminportal/Home#/adoptionScore'], ['Reporteinstellungen öffnen', 'https://admin.microsoft.com/Adminportal/Home#/Settings/Services/:/Settings/L1/Reports']],
   },
   storage: {
     explanation: 'Postfach- und OneDrive-Berichte zeigen belegten Speicher und gemeldete Kapazitäten je Benutzer sowie als Tenant-Summe. Die Werte sind Berichtssnapshots und können gegenüber den Admin-Portalen verzögert sein.',
@@ -236,9 +238,12 @@ let msalConfigKey;
 let authenticationPromise;
 let reportNamesBusy = false;
 let pendingExportFormat;
+let usagePeriod = usagePeriods.has(sessionStorage.getItem(USAGE_PERIOD_KEY)) ? sessionStorage.getItem(USAGE_PERIOD_KEY) : 'D90';
 const BATCH_INTERVAL_MS = 1000;
 const runEtaDeadlines = new Map();
 let nextBatchAt = 0;
+const reportQueues = [Promise.resolve(), Promise.resolve()];
+let reportQueueIndex = 0;
 
 class GraphError extends Error {
   constructor(status, code, message) {
@@ -546,16 +551,21 @@ async function graphCollection(path, token, limit = Infinity, options = {}) {
   return values.slice(0, limit);
 }
 
-async function serverReport(report, token) {
-  let response;
-  try {
-    response = await fetch(`/api/reports/${report}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(135000) });
-  } catch {
-    throw new GraphError(503, 'reportProxyUnavailable', 'Der lokale Report-Collector ist nicht erreichbar.');
-  }
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new GraphError(response.status, payload.error?.code, payload.error?.message || `Der Report-Collector antwortete mit HTTP ${response.status}.`);
-  return payload.value || [];
+async function serverReport(report, token, period = 'D90') {
+  const queue = reportQueueIndex++ % reportQueues.length;
+  const request = reportQueues[queue].catch(() => {}).then(async () => {
+    let response;
+    try {
+      response = await fetch(`/api/reports/${report}?period=${encodeURIComponent(period)}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(135000) });
+    } catch {
+      throw new GraphError(503, 'reportProxyUnavailable', 'Der lokale Report-Collector ist nicht erreichbar.');
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new GraphError(response.status, payload.error?.code, payload.error?.message || `Der Report-Collector antwortete mit HTTP ${response.status}.`);
+    return payload.value || [];
+  });
+  reportQueues[queue] = request;
+  return request;
 }
 
 function chunks(values, size) {
@@ -628,7 +638,7 @@ async function readDatasets(token, specifications, progress = () => {}) {
   const settled = await Promise.allSettled(entries.map(async ([, specification]) => {
     try {
       const value = specification.report
-        ? await serverReport(specification.report, token)
+        ? await serverReport(specification.report, token, specification.period)
         : specification.single
           ? await graphRequest(specification.path, token)
           : await graphCollection(specification.path, token, specification.limit);
@@ -860,13 +870,17 @@ const inventoryRunners = {
     return includePartialFailures(analyseLicenses(data.skus, data.users, prices, usage), failures, 'licenses');
   },
   async usage(token, progress) {
+    const period = usagePeriod;
     const { data, failures, allFailed } = await readDatasets(token, {
       users: { label: 'Benutzerverzeichnis', path: '/users?$select=id,displayName,userPrincipalName,accountEnabled,userType,assignedLicenses&$top=999' },
-      apps: { label: 'Microsoft-365-App-Nutzung', report: 'm365-apps' },
-      active: { label: 'Dienstnutzung', path: "https://graph.microsoft.com/beta/reports/getOffice365ActiveUserDetail(period='D90')?$format=application/json&$top=999" },
-      teams: { label: 'Teams-Nutzung', path: "https://graph.microsoft.com/beta/reports/getTeamsUserActivityUserDetail(period='D90')?$format=application/json&$top=999" },
-      email: { label: 'E-Mail-Nutzung', path: "https://graph.microsoft.com/beta/reports/getEmailActivityUserDetail(period='D90')?$format=application/json&$top=999" },
-      copilot: { label: 'Copilot-Nutzung', report: 'copilot' },
+      apps: { label: 'Microsoft-365-App-Nutzung', report: 'm365-apps', period },
+      active: { label: 'Dienstnutzung', path: `https://graph.microsoft.com/beta/reports/getOffice365ActiveUserDetail(period='${period}')?$format=application/json&$top=999` },
+      teams: { label: 'Teams-Nutzung', path: `https://graph.microsoft.com/beta/reports/getTeamsUserActivityUserDetail(period='${period}')?$format=application/json&$top=999` },
+      email: { label: 'E-Mail-Nutzung', path: `https://graph.microsoft.com/beta/reports/getEmailActivityUserDetail(period='${period}')?$format=application/json&$top=999` },
+      sharePoint: { label: 'SharePoint-Benutzeraktivität', report: 'sharepoint-activity', period },
+      oneDrive: { label: 'OneDrive-Benutzeraktivität', report: 'onedrive-activity', period },
+      viva: { label: 'Viva-Engage-Aktivität', report: 'viva-engage', period },
+      copilot: { label: 'Copilot-Nutzung', report: 'copilot', period },
     }, progress);
     let reportSettings = {};
     try {
@@ -877,7 +891,12 @@ const inventoryRunners = {
     } catch (error) {
       failures.push({ label: 'Report-Anonymisierung', error });
     }
-    return includePartialFailures(analyseUsage(data.users, data.apps, data.active, data.teams, data.email, data.copilot, reportSettings), failures, 'usage', allFailed);
+    const failed = new Set(failures.map(({ label }) => label));
+    const availability = {
+      apps: !failed.has('Microsoft-365-App-Nutzung'), teams: !failed.has('Teams-Nutzung'), email: !failed.has('E-Mail-Nutzung'),
+      sharePoint: !failed.has('SharePoint-Benutzeraktivität'), oneDrive: !failed.has('OneDrive-Benutzeraktivität'), viva: !failed.has('Viva-Engage-Aktivität'), copilot: !failed.has('Copilot-Nutzung'),
+    };
+    return includePartialFailures(analyseUsage(data.users, data.apps, data.active, data.teams, data.email, data.copilot, reportSettings, data.sharePoint, data.oneDrive, data.viva, period, availability), failures, 'usage', allFailed);
   },
   async storage(token, progress) {
     const data = await requiredDatasets(token, {
@@ -1212,6 +1231,33 @@ const metricFilterRules = {
   ],
 };
 
+function adoptionDashboard(result) {
+  if (!result.adoption) return '';
+  const groups = new Map();
+  result.adoption.metrics.forEach((metric, index) => {
+    if (!groups.has(metric.group)) groups.set(metric.group, []);
+    groups.get(metric.group).push({ ...metric, index });
+  });
+  return `<section class="adoption-dashboard" data-export-section="summary" aria-labelledby="adoption-heading">
+    <div class="adoption-toolbar">
+      <div><h3 id="adoption-heading">Was wird wie genutzt?</h3><p>Anteil der im jeweiligen Microsoft-Report auswertbaren Konten. Ein Klick zeigt die zugehörigen Konten – zuerst 10, optional alle.</p></div>
+      <label>Zeitraum
+        <select data-usage-period aria-label="Auswertungszeitraum">
+          ${[['D7', '7 Tage'], ['D30', '30 Tage'], ['D90', '90 Tage'], ['D180', '180 Tage']].map(([value, label]) => `<option value="${value}" ${result.adoption.period === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    ${[...groups].map(([group, metrics]) => `<section class="adoption-group"><h4>${escapeHtml(group)}</h4><div class="adoption-bars">
+      ${metrics.map((metric) => `<button class="adoption-row" type="button" data-adoption-index="${metric.index}" aria-pressed="false" ${metric.available ? '' : 'disabled'} title="${escapeHtml(metric.description)}">
+        <span class="adoption-label"><strong>${escapeHtml(metric.label)}</strong><small>${escapeHtml(metric.description)}</small></span>
+        <progress max="100" value="${metric.percent}" aria-label="${escapeHtml(`${metric.label}: ${metric.percent} Prozent`)}"></progress>
+        <span class="adoption-value">${metric.available ? `<strong>${Number(metric.active).toLocaleString('de-DE')}</strong> von ${Number(metric.total).toLocaleString('de-DE')}<small>${metric.percent} % nutzen es</small>` : '<strong>–</strong><small>Nicht auswertbar</small>'}</span>
+      </button>`).join('')}
+    </div></section>`).join('')}
+    <p class="adoption-note">Aktivität beschreibt Nutzung, nicht Produktivität. SharePoint und OneDrive melden „angesehen oder bearbeitet“ gemeinsam; Nachrichteninhalte und Copilot-Prompts werden nicht gelesen.</p>
+  </section>`;
+}
+
 function detailTables(result) {
   return detailGroups(result).map((details) => `
     <details class="detail-group" data-detail-title="${escapeHtml(details.title)}" open>
@@ -1276,13 +1322,19 @@ function paginateCollection(collection, page) {
     if (collection.paginationControls) collection.paginationControls.innerHTML = '<span>0 Treffer</span>';
     return;
   }
+  if (collection.showAll) {
+    items.forEach((item) => { item.hidden = false; });
+    if (collection.paginationControls) collection.paginationControls.innerHTML = `<button class="pagination-all" type="button" data-show-all="false">10 pro Seite</button><span>Alle ${items.length} Einträge</span>`;
+    return;
+  }
   const current = Math.max(1, Math.min(page, pages));
   items.forEach((item, index) => { item.hidden = index < (current - 1) * 10 || index >= current * 10; });
   if (!collection.paginationControls) return;
   collection.paginationControls.innerHTML = `
     <button type="button" data-page="${current - 1}" ${current === 1 ? 'disabled' : ''} aria-label="Vorherige Seite"><span class="icon icon-chevron-left" aria-hidden="true"></span></button>
     <span>${(current - 1) * 10 + 1}–${Math.min(current * 10, items.length)} von ${items.length} · Seite ${current}/${pages}</span>
-    <button type="button" data-page="${current + 1}" ${current === pages ? 'disabled' : ''} aria-label="Nächste Seite"><span class="icon icon-chevron-right" aria-hidden="true"></span></button>`;
+    <button type="button" data-page="${current + 1}" ${current === pages ? 'disabled' : ''} aria-label="Nächste Seite"><span class="icon icon-chevron-right" aria-hidden="true"></span></button>
+    <button class="pagination-all" type="button" data-show-all="true">Alle anzeigen</button>`;
 }
 
 function metricConditionMatches(table, row, condition) {
@@ -1325,20 +1377,19 @@ function refreshTableFilter(table) {
   group.querySelector('summary span').textContent = visible === total ? `${total} Einträge` : `${visible} von ${total} Einträgen`;
   const label = group.querySelector('[data-metric-filter-label]');
   label.hidden = !table.metricLabel;
-  label.textContent = table.metricLabel ? `Kachel: ${table.metricLabel}` : '';
+  label.textContent = table.metricLabel ? `Auswahl: ${table.metricLabel}` : '';
   group.querySelector('[data-clear-table-filter]').hidden = !query && !minimumAge && !table.metricFilter;
+  table.showAll = false;
   paginateCollection(table, 1);
 }
 
-function applyMetricFilter(button) {
-  const panel = button.closest('[data-report-panel]');
+function applyDetailFilter(panel, rule, label, button) {
   const groups = [...panel.querySelectorAll('.detail-group')];
   const fallback = groups[0]?.dataset.detailTitle;
-  const rule = metricFilterRules[panel.dataset.reportScope]?.[Number(button.dataset.metricIndex)] || { details: [fallback] };
   const targets = rule.details || [fallback];
   const targetGroups = groups.filter((group) => targets.includes(group.dataset.detailTitle));
   if (!targetGroups.length) {
-    showToast(`${button.querySelector('small').textContent}: keine Einträge`);
+    showToast(`${label}: keine Einträge`);
     return;
   }
   for (const group of groups) {
@@ -1346,13 +1397,34 @@ function applyMetricFilter(button) {
     group.open = selected;
     const table = group.querySelector('table');
     table.metricFilter = selected ? rule : null;
-    table.metricLabel = selected ? button.querySelector('small').textContent : '';
+    table.metricLabel = selected ? label : '';
     group.querySelector('[data-table-search]').value = '';
     if (group.querySelector('[data-age-filter]')) group.querySelector('[data-age-filter]').value = '0';
     refreshTableFilter(table);
+    if (selected && rule.sortBy) {
+      const header = [...table.tHead.rows[0].cells].find((cell) => cell.dataset.column === rule.sortBy);
+      if (header) {
+        header.setAttribute('aria-sort', 'ascending');
+        sortTable(header.querySelector('.table-sort'));
+      }
+    }
   }
-  panel.querySelectorAll('[data-metric-index]').forEach((card) => card.setAttribute('aria-pressed', String(card === button)));
+  panel.querySelectorAll('[data-metric-index], [data-adoption-index]').forEach((control) => control.setAttribute('aria-pressed', String(control === button)));
   targetGroups[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function applyMetricFilter(button) {
+  const panel = button.closest('[data-report-panel]');
+  const fallback = panel.querySelector('.detail-group')?.dataset.detailTitle;
+  const rule = metricFilterRules[panel.dataset.reportScope]?.[Number(button.dataset.metricIndex)] || { details: [fallback] };
+  applyDetailFilter(panel, rule, button.querySelector('small').textContent, button);
+}
+
+function applyAdoptionFilter(button) {
+  const panel = button.closest('[data-report-panel]');
+  const result = currentReport?.results.find(({ id }) => id === panel.dataset.reportScope);
+  const metric = result?.adoption?.metrics[Number(button.dataset.adoptionIndex)];
+  if (metric) applyDetailFilter(panel, { details: [metric.detailTitle], conditions: metric.conditions, sortBy: metric.sortBy }, metric.label, button);
 }
 
 function clearTableFilter(button) {
@@ -1362,7 +1434,7 @@ function clearTableFilter(button) {
   if (group.querySelector('[data-age-filter]')) group.querySelector('[data-age-filter]').value = '0';
   table.metricFilter = null;
   table.metricLabel = '';
-  group.closest('[data-report-panel]').querySelectorAll('[data-metric-index]').forEach((card) => card.setAttribute('aria-pressed', 'false'));
+  group.closest('[data-report-panel]').querySelectorAll('[data-metric-index], [data-adoption-index]').forEach((control) => control.setAttribute('aria-pressed', 'false'));
   refreshTableFilter(table);
 }
 
@@ -1471,7 +1543,7 @@ function renderReport(report) {
           <p>${escapeHtml(result.error || result.summary)}</p>
           ${guidance ? `<p class="area-explanation">${escapeHtml(guidance.explanation)}</p><div class="area-practice" data-export-section="goodPractice"><strong>Good Practice</strong><p>${escapeHtml(guidance.goodPractice)}</p>${guidanceActions(result.id, 'Diesen Bereich erneut prüfen', result)}</div>` : ''}
         </div>
-        ${result.error ? '' : `<div class="area-metrics" data-export-section="summary">${result.metrics.map(([value, label], index) => `<button class="score-card metric-card" type="button" data-metric-index="${index}" aria-pressed="false" title="${escapeHtml(label)} in den Details anzeigen"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong><span class="metric-link">Details filtern <span class="icon icon-arrow-right" aria-hidden="true"></span></span></button>`).join('')}</div>`}
+        ${result.error ? '' : result.adoption ? adoptionDashboard(result) : `<div class="area-metrics" data-export-section="summary">${result.metrics.map(([value, label], index) => `<button class="score-card metric-card" type="button" data-metric-index="${index}" aria-pressed="false" title="${escapeHtml(label)} in den Details anzeigen"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong><span class="metric-link">Details filtern <span class="icon icon-arrow-right" aria-hidden="true"></span></span></button>`).join('')}</div>`}
         <section class="report-section" data-export-section="findings"><h3>Befunde</h3><div class="finding-list">${findingCards(areaFindings, undefined, [result])}</div></section>
         <section class="report-section" data-export-section="details"><h3>Details</h3><div class="detail-groups">${detailTables(result)}</div></section>
       </div>`;
@@ -1498,7 +1570,7 @@ async function recheckScope(scopeId) {
     updateRunJob('auth', 'done', `Verbunden als ${account.username || account.name}`);
     const previous = currentReport.results.find((item) => item.id === scopeId);
     const result = await runScopeInventory(scope, accessToken);
-    const snapshot = (item) => JSON.stringify({ error: item?.error, summary: item?.summary, metrics: item?.metrics, findings: item?.findings, details: item?.details, extraDetails: item?.extraDetails, unavailable: item?.unavailable });
+    const snapshot = (item) => JSON.stringify({ error: item?.error, summary: item?.summary, metrics: item?.metrics, findings: item?.findings, adoption: item?.adoption, details: item?.details, extraDetails: item?.extraDetails, unavailable: item?.unavailable });
     result.checkedAt = new Date().toISOString();
     result.recheckChanged = snapshot(previous) !== snapshot(result);
     currentReport = buildReport(currentReport.tenant, { username: currentReport.account }, currentReport.results.map((item) => item.id === scopeId ? result : item));
@@ -1734,6 +1806,8 @@ document.querySelector('#reset-session').addEventListener('click', async () => {
   sessionStorage.removeItem(AUTH_MODE_KEY);
   sessionStorage.removeItem(ADMIN_CONSENT_STATE_KEY);
   sessionStorage.removeItem(USAGE_NOTICE_KEY);
+  sessionStorage.removeItem(USAGE_PERIOD_KEY);
+  usagePeriod = 'D90';
   form.reset();
   form.elements.redirectUri.value = currentRedirectUri();
   currentReport = undefined;
@@ -1782,6 +1856,11 @@ reportNav.addEventListener('click', (event) => {
 });
 reportNavSelect.addEventListener('change', () => showView(reportNavSelect.value));
 document.querySelector('#report-content').addEventListener('click', (event) => {
+  const adoptionRow = event.target.closest('[data-adoption-index]');
+  if (adoptionRow) {
+    applyAdoptionFilter(adoptionRow);
+    return;
+  }
   const metricCard = event.target.closest('[data-metric-index]');
   if (metricCard) {
     applyMetricFilter(metricCard);
@@ -1800,9 +1879,20 @@ document.querySelector('#report-content').addEventListener('click', (event) => {
   const button = event.target.closest('.table-sort');
   if (button) sortTable(button);
   const pageButton = event.target.closest('.pagination button');
-  if (pageButton) paginateCollection(pageButton.closest('.pagination').paginationOwner, Number(pageButton.dataset.page));
+  if (pageButton) {
+    const collection = pageButton.closest('.pagination').paginationOwner;
+    if (pageButton.dataset.showAll) collection.showAll = pageButton.dataset.showAll === 'true';
+    paginateCollection(collection, Number(pageButton.dataset.page || 1));
+  }
 });
 document.querySelector('#report-content').addEventListener('change', (event) => {
+  const periodFilter = event.target.closest('[data-usage-period]');
+  if (periodFilter && usagePeriods.has(periodFilter.value) && periodFilter.value !== usagePeriod) {
+    usagePeriod = periodFilter.value;
+    sessionStorage.setItem(USAGE_PERIOD_KEY, usagePeriod);
+    recheckScope('usage');
+    return;
+  }
   const ageFilter = event.target.closest('[data-age-filter]');
   if (ageFilter) refreshTableFilter(ageFilter.closest('.detail-group').querySelector('table'));
 });
